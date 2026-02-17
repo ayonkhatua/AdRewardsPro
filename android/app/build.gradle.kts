@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.hypernest.adrewardspro
+    namespace = "com.hypernest.adrewardspro"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
