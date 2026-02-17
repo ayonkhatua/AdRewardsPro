@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-// import 'package:unity_ads_plugin/unity_ads_plugin.dart'; // TODO: Uncomment later
 import 'package:flutter_fortune_wheel/flutter_fortune_wheel.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // NAYA PACKAGE
 
 class SpinScreen extends StatefulWidget {
   const SpinScreen({super.key});
@@ -13,51 +13,77 @@ class SpinScreen extends StatefulWidget {
 class _SpinScreenState extends State<SpinScreen> {
   final StreamController<int> _selected = StreamController<int>();
   
-  // Optimization 2: ValueNotifier for Timer (Prevents full screen rebuilds)
   final ValueNotifier<int> _timerNotifier = ValueNotifier<int>(0);
   bool _isSpinning = false;
   Timer? _cooldownTimer;
   
-  // Rewards list
   final List<int> rewards = [5, 10, 20, 50, 100, 200];
   
-  // Modern pastel colors for the wheel segments
   final List<Color> segmentColors = const [
-    Color(0xFFFFD1DC), // Pink
-    Color(0xFFFFE5B4), // Peach
-    Color(0xFFFFF4CC), // Yellow
-    Color(0xFFD4F0F0), // Mint
-    Color(0xFFE2D5F8), // Lavender
-    Color(0xFFC1E1C1), // Green
+    Color(0xFFFFD1DC), Color(0xFFFFE5B4), Color(0xFFFFF4CC), 
+    Color(0xFFD4F0F0), Color(0xFFE2D5F8), Color(0xFFC1E1C1), 
   ];
 
   @override
   void initState() {
     super.initState();
-    // _initUnityAds(); 
+    _checkSavedTimer(); // NAYA: Screen khulte hi purana timer check karega
   }
 
   // ==========================================
-  // LOGIC SECTION
+  // NAYA LOGIC: LOCAL STORAGE TIMER
+  // ==========================================
+
+  // App khulte hi check karna ki kya 60 second poore hue hain
+  Future<void> _checkSavedTimer() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastSpinTimestamp = prefs.getInt('last_spin_time') ?? 0;
+
+    if (lastSpinTimestamp == 0) return;
+
+    final currentTime = DateTime.now().millisecondsSinceEpoch;
+    final diffInSeconds = ((currentTime - lastSpinTimestamp) / 1000).floor();
+
+    if (diffInSeconds < 60) {
+      // Agar 60 second se kam hue hain, toh bacha hua time set karo
+      final remainingSeconds = 60 - diffInSeconds;
+      _timerNotifier.value = remainingSeconds;
+      _startCountdownLogic();
+    } else {
+      // Agar time nikal gaya toh clear kar do
+      prefs.remove('last_spin_time');
+    }
+  }
+
+  // Spin hote hi current time save karna
+  Future<void> _saveCurrentTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setInt('last_spin_time', DateTime.now().millisecondsSinceEpoch);
+  }
+
+  // ==========================================
+  // NORMAL LOGIC SECTION
   // ==========================================
 
   void _handleSpinClick() {
     if (_timerNotifier.value > 0 || _isSpinning) return; 
-
-    // TESTING MODE: Seedha spin start karo (Bina ad ke)
     _startSpin();
   }
 
   void _startSpin() {
     setState(() => _isSpinning = true);
-    // Randomly select a winning index
     int winningIndex = Fortune.randomInt(0, rewards.length);
     _selected.add(winningIndex);
   }
 
   void _startCooldown() {
-    _timerNotifier.value = 60; // 60 seconds cooldown
-    
+    _timerNotifier.value = 60; 
+    _saveCurrentTime(); // NAYA: Timer start hote hi time save karo
+    _startCountdownLogic();
+  }
+
+  // Timer chalane ka alag function banaya taaki resume karne me aasaani ho
+  void _startCountdownLogic() {
     _cooldownTimer?.cancel();
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -74,7 +100,7 @@ class _SpinScreenState extends State<SpinScreen> {
   }
 
   // ==========================================
-  // UI SECTION
+  // UI SECTION (Same as before)
   // ==========================================
 
   @override
@@ -92,26 +118,19 @@ class _SpinScreenState extends State<SpinScreen> {
           children: [
             const SizedBox(height: 40),
             
-            // 1. MODERN SPIN WHEEL (Optimized)
             SizedBox(
               height: 320,
-              // Optimization 1: RepaintBoundary stops the widget from redrawing every frame
               child: RepaintBoundary(
                 child: FortuneWheel(
                   selected: _selected.stream,
                   animateFirst: false,
-                  // Directly set duration here for smooth programmatic spins
                   duration: const Duration(seconds: 4), 
                   items: [
                     for (int i = 0; i < rewards.length; i++)
                       FortuneItem(
                         child: Text(
                           rewards[i].toString(), 
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900, 
-                            fontSize: 24,
-                            color: Colors.black87,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: Colors.black87),
                         ),
                         style: FortuneItemStyle(
                           color: segmentColors[i % segmentColors.length], 
@@ -124,8 +143,6 @@ class _SpinScreenState extends State<SpinScreen> {
                     if (!mounted) return;
                     setState(() => _isSpinning = false);
                     _startCooldown();
-                    
-                    // TODO: Yahan backend me coins add karne ka logic aayega
                     
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -141,7 +158,6 @@ class _SpinScreenState extends State<SpinScreen> {
             
             const SizedBox(height: 50),
 
-            // 2. SPIN BUTTON WITH TIMER
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 30),
               child: ValueListenableBuilder<int>(
@@ -167,7 +183,6 @@ class _SpinScreenState extends State<SpinScreen> {
 
             const SizedBox(height: 20),
             
-            // 3. STATUS TEXT
             ValueListenableBuilder<int>(
               valueListenable: _timerNotifier,
               builder: (context, timerValue, child) {
@@ -190,7 +205,7 @@ class _SpinScreenState extends State<SpinScreen> {
   @override
   void dispose() {
     _selected.close();
-    _timerNotifier.dispose(); // Memory clear
+    _timerNotifier.dispose(); 
     _cooldownTimer?.cancel(); 
     super.dispose();
   }

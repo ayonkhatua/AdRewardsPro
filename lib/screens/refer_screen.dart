@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Copy feature ke liye
+import 'package:flutter/services.dart'; 
 import 'package:supabase_flutter/supabase_flutter.dart';
-// import 'package:share_plus/share_plus.dart'; // Asli share feature ke liye baad mein use karenge
+import 'package:share_plus/share_plus.dart'; // TODO: pubspec.yaml mein share_plus dalne ke baad ise uncomment karein
 
 class ReferScreen extends StatefulWidget {
   const ReferScreen({super.key});
@@ -24,10 +24,9 @@ class _ReferScreenState extends State<ReferScreen> {
   Future<void> _fetchReferralCode() async {
     final user = Supabase.instance.client.auth.currentUser;
     
-    // Testing mode bypass (Agar user login nahi hai)
     if (user == null) {
       setState(() {
-        _referralCode = "AYON123"; // Dummy code
+        _referralCode = "AYON123"; 
         _isLoading = false;
       });
       return;
@@ -62,27 +61,31 @@ class _ReferScreenState extends State<ReferScreen> {
   }
 
   void _shareCode() {
-    // TODO: Jab app playstore/website par jayega tab Share.share() lagayenge
-    final String shareMessage = "Hey! Download this amazing earning app. Use my referral code $_referralCode and earn daily coins!";
+    // Professional Share Message
+    final String shareMessage = "Hey! I'm earning real money on AdRewards Pro. 🚀\n\nDownload the app, use my Referral Code: *$_referralCode* and get a head start!\n\nLet's earn together!";
     
+    // TODO: Jab pubspec.yaml mein package add ho jaye, tab is line ko uncomment kar dena
+    // Share.share(shareMessage); 
+
+    // Abhi testing ke liye SnackBar
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Share menu will open here!'),
+        content: Text('Share menu will open here in Live App!'),
         behavior: SnackBarBehavior.floating,
       ),
     );
-    // Share.share(shareMessage); // Asli code aisa hoga
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDF8FD), // Pastel background
+      backgroundColor: const Color(0xFFFDF8FD), 
       appBar: AppBar(
-        title: const Text('Refer & Earn'),
+        title: const Text('Refer & Earn', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF1D1B20)),
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator(color: Color(0xFF6750A4)))
@@ -95,10 +98,10 @@ class _ReferScreenState extends State<ReferScreen> {
                 Container(
                   padding: const EdgeInsets.all(30),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEADDFF), // Pastel Purple
+                    color: const Color(0xFFEADDFF), 
                     shape: BoxShape.circle,
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFF6750A4).withOpacity(0.2), blurRadius: 30, spreadRadius: 5)
+                      BoxShadow(color: const Color(0xFF6750A4).withOpacity(0.15), blurRadius: 30, spreadRadius: 5)
                     ]
                   ),
                   child: const Icon(Icons.groups_rounded, size: 80, color: Color(0xFF6750A4)),
@@ -112,31 +115,32 @@ class _ReferScreenState extends State<ReferScreen> {
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF1D1B20)),
                 ),
                 
-                const SizedBox(height: 15),
+                const SizedBox(height: 20),
 
-                // 3. STRICT CONDITION TEXT (Jo aapne bola tha)
+                // 3. STRICT CONDITION TEXT (Anti-Hacker Warning)
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF4CC), // Pastel Yellow Warning
-                    borderRadius: BorderRadius.circular(16),
+                    color: const Color(0xFFFFF4CC), 
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFFFDE293), width: 2),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
-                  child: const Column(
+                  child: Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.info_outline_rounded, color: Color(0xFF311300), size: 20),
+                        children: const [
+                          Icon(Icons.security_rounded, color: Color(0xFF146C2E), size: 24),
                           SizedBox(width: 8),
-                          Text("How it works?", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF311300))),
+                          Text("100% Verified Reward", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF146C2E))),
                         ],
                       ),
-                      SizedBox(height: 8),
-                      Text(
-                        "When your friend downloads the app using your code and makes their FIRST WITHDRAWAL, you will get 100 Bonus Coins instantly!",
+                      const SizedBox(height: 12),
+                      const Text(
+                        "You will receive 100 Bonus Coins ONLY when your friend makes their FIRST SUCCESSFUL WITHDRAWAL.",
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Color(0xFF311300), fontSize: 14, fontWeight: FontWeight.w500, height: 1.4),
+                        style: TextStyle(color: Color(0xFF311300), fontSize: 14, fontWeight: FontWeight.w600, height: 1.5),
                       ),
                     ],
                   ),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:google_fonts/google_fonts.dart'; // Font style ke liye
-import 'home_screen.dart'; // Dashboard navigate karne ke liye
+import 'package:google_fonts/google_fonts.dart'; 
+import 'home_screen.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,56 +12,88 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // Controllers
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _referralController = TextEditingController(); // NAYA: Referral Code ke liye
+  
   bool _isLoading = false;
+  bool _isLoginMode = true; // Toggle between Login and Signup
 
   final supabase = Supabase.instance.client;
 
-  // --- LOGIC SECTION ---
+  // ==========================================
+  // LOGIC SECTION
+  // ==========================================
 
-  Future<void> _handleAuth(bool isSignup) async {
+  Future<void> _handleAuth() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final referralCode = _referralController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showSnackBar('Please fill all required fields.', Colors.red);
+      return;
+    }
+
     setState(() => _isLoading = true);
+    
     try {
-      if (isSignup) {
-        await supabase.auth.signUp(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Account created! Please login.')),
-          );
-        }
+      if (_isLoginMode) {
+        // --- LOGIN LOGIC ---
+        await supabase.auth.signInWithPassword(email: email, password: password);
+        _navigateToHome();
       } else {
-        await supabase.auth.signInWithPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-        if (mounted) {
-           Navigator.pushReplacement(
-             context,
-             MaterialPageRoute(builder: (context) => const HomeScreen()),
-           );
+        // --- SIGNUP LOGIC ---
+        final AuthResponse res = await supabase.auth.signUp(email: email, password: password);
+        
+        // Agar signup successful hua aur user ne referral code daala hai
+        if (res.user != null && referralCode.isNotEmpty) {
+           await _processReferralCode(res.user!.id, referralCode);
         }
+        
+        _showSnackBar('Account created! You can now login.', Colors.green);
+        
+        // Signup ke baad wapas Login mode mein bhej do
+        setState(() {
+          _isLoginMode = true;
+          _referralController.clear();
+          _passwordController.clear();
+        });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showSnackBar(e.toString(), Colors.red);
     }
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  // Database me referral link banane ka function
+  Future<void> _processReferralCode(String newUserId, String enteredCode) async {
+    try {
+      // 1. Check karo ki code kiska hai
+      final response = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('referral_code', enteredCode)
+          .maybeSingle();
+
+      // 2. Agar code mil gaya (matlab sahi hai), toh naye user ke profile me 'referred_by' add kar do
+      if (response != null && response['id'] != null) {
+        final referrerId = response['id'];
+        
+        await supabase.from('profiles').update({
+          'referred_by': referrerId
+        }).eq('id', newUserId);
+      }
+    } catch (e) {
+      print("Referral Code Error: $e");
+      // Hum app crash nahi karenge agar referral code galat ho
+    }
   }
 
   Future<void> _googleSignIn() async {
     setState(() => _isLoading = true);
     try {
-      // ⚠️ IMPORTANT: Yahan WEB CLIENT ID aayegi (Android Client ID nahi)
       const webClientId = '1012104223725-h8fgitcn88suslhbc791lcsvjvoo6m15.apps.googleusercontent.com';
 
       final GoogleSignIn googleSignIn = GoogleSignIn(
@@ -72,16 +104,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         if (mounted) setState(() => _isLoading = false);
-        return; // User cancelled
+        return; 
       }
 
       final googleAuth = await googleUser.authentication;
       final accessToken = googleAuth.accessToken;
       final idToken = googleAuth.idToken;
 
-      if (accessToken == null || idToken == null) {
-        throw 'Google Tokens missing';
-      }
+      if (accessToken == null || idToken == null) throw 'Google Tokens missing';
 
       await supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
@@ -89,23 +119,30 @@ class _LoginScreenState extends State<LoginScreen> {
         accessToken: accessToken,
       );
 
-      if (mounted) {
-         Navigator.pushReplacement(
-           context,
-           MaterialPageRoute(builder: (context) => const HomeScreen()),
-         );
-      }
+      _navigateToHome();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google Login Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+      _showSnackBar('Google Login Error: $e', Colors.red);
     }
     if (mounted) setState(() => _isLoading = false);
   }
 
-  // --- UI SECTION ---
+  void _navigateToHome() {
+    if (mounted) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
+
+  // ==========================================
+  // UI SECTION
+  // ==========================================
 
   @override
   Widget build(BuildContext context) {
@@ -117,10 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF6A11CB), // Purple
-              Color(0xFF2575FC), // Blue
-            ],
+            colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
           ),
         ),
         child: Center(
@@ -132,24 +166,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 // 1. LOGO / ICON
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
                   child: const Icon(Icons.monetization_on_rounded, size: 60, color: Colors.white),
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Welcome Back!',
-                  style: GoogleFonts.poppins(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                  _isLoginMode ? 'Welcome Back!' : 'Create Account',
+                  style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Login to start earning rewards',
+                  _isLoginMode ? 'Login to start earning rewards' : 'Join us and start earning today!',
                   style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14),
                 ),
                 const SizedBox(height: 40),
@@ -160,27 +187,28 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
                   ),
                   child: Column(
                     children: [
                       _buildTextField(_emailController, 'Email Address', Icons.email_outlined, false),
                       const SizedBox(height: 16),
                       _buildTextField(_passwordController, 'Password', Icons.lock_outline, true),
+                      
+                      // NAYA: Referral Code sirf Signup me dikhega
+                      if (!_isLoginMode) ...[
+                        const SizedBox(height: 16),
+                        _buildTextField(_referralController, 'Referral Code (Optional)', Icons.group_add_outlined, false),
+                      ],
+                      
                       const SizedBox(height: 24),
                       
-                      // LOGIN BUTTON
+                      // MAIN BUTTON
                       SizedBox(
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : () => _handleAuth(false),
+                          onPressed: _isLoading ? null : _handleAuth,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6A11CB),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -188,19 +216,34 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           child: _isLoading
                               ? const CircularProgressIndicator(color: Colors.white)
-                              : Text('LOGIN', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                              : Text(
+                                  _isLoginMode ? 'LOGIN' : 'SIGN UP', 
+                                  style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)
+                                ),
                         ),
                       ),
                       
                       const SizedBox(height: 16),
-                      // SIGNUP LINK
+                      
+                      // TOGGLE LINK
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text("Don't have an account? ", style: GoogleFonts.poppins(color: Colors.grey)),
+                          Text(
+                            _isLoginMode ? "Don't have an account? " : "Already have an account? ", 
+                            style: GoogleFonts.poppins(color: Colors.grey)
+                          ),
                           GestureDetector(
-                            onTap: _isLoading ? null : () => _handleAuth(true),
-                            child: Text("Sign Up", style: GoogleFonts.poppins(color: const Color(0xFF6A11CB), fontWeight: FontWeight.bold)),
+                            onTap: _isLoading ? null : () {
+                              setState(() {
+                                _isLoginMode = !_isLoginMode; // Mode change
+                                _referralController.clear(); // Clear referral code
+                              });
+                            },
+                            child: Text(
+                              _isLoginMode ? "Sign Up" : "Login", 
+                              style: GoogleFonts.poppins(color: const Color(0xFF6A11CB), fontWeight: FontWeight.bold)
+                            ),
                           ),
                         ],
                       ),
@@ -221,7 +264,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // 3. GOOGLE BUTTON (Modern Style)
+                // 3. GOOGLE BUTTON
                 SizedBox(
                   width: double.infinity,
                   height: 55,
@@ -233,10 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     ),
-                    icon: Image.network(
-                      'https://img.icons8.com/color/48/000000/google-logo.png', // Google Logo
-                      height: 24,
-                    ),
+                    icon: Image.network('https://img.icons8.com/color/48/000000/google-logo.png', height: 24),
                     label: Text('Sign in with Google', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                 ),

@@ -7,6 +7,7 @@ import 'spin_screen.dart';
 import 'scratch_screen.dart';
 import 'refer_screen.dart';
 import 'withdrawal_screen.dart';
+import 'login_screen.dart'; // NAYA: Login screen import kiya
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,24 +17,24 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0; // Default ab 'Home' tab (Index 0) par rakhenge HTML ke hisab se
+  int _currentIndex = 0; 
 
   final List<Widget> _tabs = [
-    const HomeTab(),    // Index 0
-    const EarnTab(),    // Index 1
-    const ProfileTab(), // Index 2
+    const HomeTab(),    
+    const EarnTab(),    
+    const ProfileTab(), 
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDF8FD), // var(--md-surface)
+      backgroundColor: const Color(0xFFFDF8FD), 
       body: SafeArea(child: _tabs[_currentIndex]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         backgroundColor: Colors.white,
         elevation: 10,
-        indicatorColor: const Color(0xFFEADDFF), // var(--md-surface-variant)
+        indicatorColor: const Color(0xFFEADDFF), 
         onDestinationSelected: (int index) {
           setState(() {
             _currentIndex = index;
@@ -122,7 +123,6 @@ class _HomeTabState extends State<HomeTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. HEADER (Dashboard Title + Wallet Balance Instead of ID)
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Row(
@@ -155,7 +155,6 @@ class _HomeTabState extends State<HomeTab> {
             ),
           ),
 
-          // 2. MAIN BALANCE CARD (Pastel Purple Theme)
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 20),
             padding: const EdgeInsets.all(20),
@@ -185,11 +184,8 @@ class _HomeTabState extends State<HomeTab> {
 
           const SizedBox(height: 16),
 
-          // 3. REFERRAL CARD
-          // 3. REFERRAL CARD (Ab Clickable hai)
           GestureDetector(
             onTap: () {
-              // Card par click karte hi ReferScreen open hoga
               Navigator.push(
                 context, 
                 MaterialPageRoute(builder: (_) => const ReferScreen())
@@ -213,7 +209,6 @@ class _HomeTabState extends State<HomeTab> {
                   const Text("Share your code to earn bonuses.", style: TextStyle(color: Color(0xFF79747E), fontSize: 14)),
                   const SizedBox(height: 16),
                   
-                  // Code Box
                   Container(
                     padding: const EdgeInsets.only(left: 16, right: 8, top: 8, bottom: 8),
                     decoration: BoxDecoration(
@@ -225,11 +220,9 @@ class _HomeTabState extends State<HomeTab> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(_referralCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.5)),
-                        
-                        // Copy Button alag se kaam karega bina screen change kiye
                         IconButton(
                           onPressed: () {
-                            _copyReferralCode(); // Copy function call
+                            _copyReferralCode(); 
                           },
                           icon: const Icon(Icons.copy_rounded, color: Color(0xFF6750A4)),
                           splashRadius: 20,
@@ -244,14 +237,12 @@ class _HomeTabState extends State<HomeTab> {
 
           const SizedBox(height: 24),
 
-          // 4. BONUS TASKS SECTION
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Text("Bonus Tasks", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF79747E))),
           ),
           const SizedBox(height: 16),
           
-          // Empty State Message (HTML reference)
           const Center(
             child: Padding(
               padding: EdgeInsets.all(20.0),
@@ -316,7 +307,7 @@ class EarnTab extends StatelessWidget {
             title: 'Lucky Spin',
             subtitle: 'Spin the wheel & win daily rewards',
             icon: Icons.casino_rounded,
-            iconBgColor: const Color(0xFFFFDBCB), // Pastel Orange
+            iconBgColor: const Color(0xFFFFDBCB), 
             iconColor: const Color(0xFF311300),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SpinScreen())),
           ),
@@ -325,7 +316,7 @@ class EarnTab extends StatelessWidget {
             title: 'Scratch & Win',
             subtitle: 'Scratch cards for instant coins',
             icon: Icons.style_rounded,
-            iconBgColor: const Color(0xFFC4EED0), // Pastel Green
+            iconBgColor: const Color(0xFFC4EED0), 
             iconColor: const Color(0xFF00210C),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScratchScreen())),
           ),
@@ -367,6 +358,33 @@ class ProfileTab extends StatelessWidget {
           const SizedBox(height: 30),
 
           Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8DEF8), 
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFD0BCFF), width: 1),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, color: Color(0xFF6750A4), size: 28),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text("Coin Value", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1D192B), fontSize: 16)),
+                      SizedBox(height: 2),
+                      Text("100 Coins = ₹2", style: TextStyle(color: Color(0xFF49454F), fontSize: 14, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+
+          Container(
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
@@ -387,12 +405,21 @@ class ProfileTab extends StatelessWidget {
           const Text("Settings", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF79747E))),
           const SizedBox(height: 10),
           
+          // NAYA LOGOUT LOGIC (Perfect Routing ke sath)
           ListTile(
             leading: const Icon(Icons.logout_rounded, color: Colors.red),
             title: const Text('Logout', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
             onTap: () async {
+              // 1. Supabase se session khatam karo
               await Supabase.instance.client.auth.signOut();
-              if(context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+              
+              // 2. Turant Login screen par bhej do
+              if (context.mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              }
             },
           ),
         ],

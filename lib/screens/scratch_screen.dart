@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:scratcher/scratcher.dart';
-// import 'package:unity_ads_plugin/unity_ads_plugin.dart'; // TODO: Ads System (Blocked for testing)
+import 'package:shared_preferences/shared_preferences.dart'; // NAYA PACKAGE
+// import 'package:unity_ads_plugin/unity_ads_plugin.dart'; // TODO: Ads System
 
 class ScratchScreen extends StatefulWidget {
   const ScratchScreen({super.key});
@@ -14,12 +15,11 @@ class ScratchScreen extends StatefulWidget {
 class _ScratchScreenState extends State<ScratchScreen> {
   final GlobalKey<ScratcherState> _scratchKey = GlobalKey<ScratcherState>();
   
-  // Optimization 1: ValueNotifier use kiya hai taaki poori screen rebuild na ho
   final ValueNotifier<int> _timerNotifier = ValueNotifier<int>(0);
   Timer? _cooldownTimer;
   
   final int _dailyLimit = 3; 
-  int _scratchCount = 0; 
+  int _scratchCount = 0; // TODO: Ye baad me Supabase se aayega taaki refresh par reset na ho
   int _currentReward = 0;
   bool _isRevealed = false;
 
@@ -27,6 +27,40 @@ class _ScratchScreenState extends State<ScratchScreen> {
   void initState() {
     super.initState();
     _generateReward();
+    _checkSavedTimer(); // NAYA: Screen khulte hi purana timer check karega
+  }
+
+  // ==========================================
+  // NAYA LOGIC: LOCAL STORAGE TIMER
+  // ==========================================
+
+  Future<void> _checkSavedTimer() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastScratchTimestamp = prefs.getInt('last_scratch_time') ?? 0;
+
+    if (lastScratchTimestamp == 0) return;
+
+    final currentTime = DateTime.now().millisecondsSinceEpoch;
+    final diffInSeconds = ((currentTime - lastScratchTimestamp) / 1000).floor();
+
+    if (diffInSeconds < 60) {
+      // Agar 60 second se kam hue hain, toh bacha hua time set karo
+      final remainingSeconds = 60 - diffInSeconds;
+      _timerNotifier.value = remainingSeconds;
+      
+      setState(() {
+        _isRevealed = true; // Timer chal raha hai toh matlab card reveal ho chuka tha
+      });
+      
+      _startCountdownLogic();
+    } else {
+      prefs.remove('last_scratch_time');
+    }
+  }
+
+  Future<void> _saveCurrentTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setInt('last_scratch_time', DateTime.now().millisecondsSinceEpoch);
   }
 
   // ==========================================
@@ -34,21 +68,19 @@ class _ScratchScreenState extends State<ScratchScreen> {
   // ==========================================
 
   void _generateReward() {
-    // 1 se 10 ke beech random points
     _currentReward = Random().nextInt(10) + 1;
     _isRevealed = false;
   }
 
   void _handleScratchComplete() {
-    if (_isRevealed) return; // Double trigger rokne ke liye
+    if (_isRevealed) return; 
     
     setState(() {
       _isRevealed = true;
       _scratchCount++;
     });
 
-    // TODO: Yahan backend (Supabase) me coins update karne ka logic aayega
-
+    // TODO: Supabase me coins update
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('🎉 You won $_currentReward coins!'),
@@ -61,8 +93,12 @@ class _ScratchScreenState extends State<ScratchScreen> {
   }
 
   void _startCooldown() {
-    _timerNotifier.value = 60; // 60 Seconds Timer Setup
-    
+    _timerNotifier.value = 60; 
+    _saveCurrentTime(); // NAYA: Timer start hote hi time save karo
+    _startCountdownLogic();
+  }
+
+  void _startCountdownLogic() {
     _cooldownTimer?.cancel();
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -74,7 +110,7 @@ class _ScratchScreenState extends State<ScratchScreen> {
         timer.cancel();
         _timerNotifier.value = 0;
         
-        // Optimization 2: Timer khatam hone par card Auto-Reset hoga (Agar limit bachi hai)
+        // Auto-Reset logic jab timer 0 ho
         if (_scratchCount < _dailyLimit) {
           _scratchKey.currentState?.reset(duration: const Duration(milliseconds: 500));
           _generateReward();
@@ -86,7 +122,7 @@ class _ScratchScreenState extends State<ScratchScreen> {
   }
 
   // ==========================================
-  // UI SECTION
+  // UI SECTION (Same as before)
   // ==========================================
 
   @override
@@ -104,7 +140,6 @@ class _ScratchScreenState extends State<ScratchScreen> {
           children: [
             const SizedBox(height: 30),
             
-            // BALANCE DISPLAY
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -132,7 +167,6 @@ class _ScratchScreenState extends State<ScratchScreen> {
 
             const SizedBox(height: 40),
 
-            // MODERN SCRATCH CARD AREA
             Center(
               child: Container(
                 width: 300,
@@ -141,22 +175,19 @@ class _ScratchScreenState extends State<ScratchScreen> {
                   color: const Color(0xFFFFF4CC), 
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFFFDE293), width: 3),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, spreadRadius: 2)
-                  ]
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, spreadRadius: 2)]
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(17),
                   child: Stack(
                     children: [
-                      // Optimization 3: Strict Limit & Timer Overlay Logic
                       if (_scratchCount >= _dailyLimit)
                         _buildOverlayMessage("DAILY LIMIT REACHED", Colors.red.shade100, Colors.red)
                       else ...[
                         Scratcher(
                           key: _scratchKey,
                           brushSize: 45,
-                          threshold: 50, // 50% scratch par reward open hoga
+                          threshold: 50, 
                           color: const Color(0xFF6750A4),
                           image: Image.network(
                             "https://img.freepik.com/free-vector/abstract-purple-gradient-background_23-2148281137.jpg",
@@ -167,24 +198,20 @@ class _ScratchScreenState extends State<ScratchScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  "+$_currentReward",
-                                  style: const TextStyle(fontSize: 60, fontWeight: FontWeight.w900, color: Color(0xFF146C2E)),
-                                ),
+                                Text("+$_currentReward", style: const TextStyle(fontSize: 60, fontWeight: FontWeight.w900, color: Color(0xFF146C2E))),
                                 const Text("COINS WON", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
                               ],
                             ),
                           ),
                         ),
                         
-                        // Smart Timer Overlay (ValueListenableBuilder for performance)
                         ValueListenableBuilder<int>(
                           valueListenable: _timerNotifier,
                           builder: (context, timerValue, child) {
                             if (timerValue > 0) {
                               return _buildOverlayMessage("Wait for ${timerValue}s", Colors.black54, Colors.white);
                             }
-                            return const SizedBox.shrink(); // Hide overlay if timer is 0
+                            return const SizedBox.shrink(); 
                           },
                         ),
                       ],
@@ -196,7 +223,6 @@ class _ScratchScreenState extends State<ScratchScreen> {
 
             const SizedBox(height: 30),
             
-            // INSTRUCTION TEXT
             ValueListenableBuilder<int>(
               valueListenable: _timerNotifier,
               builder: (context, timerValue, child) {
@@ -212,7 +238,6 @@ class _ScratchScreenState extends State<ScratchScreen> {
 
             const SizedBox(height: 40),
 
-            // LIMIT TEXT
             Text(
               "Daily limits: $_scratchCount / $_dailyLimit",
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF6750A4)),
@@ -223,15 +248,11 @@ class _ScratchScreenState extends State<ScratchScreen> {
     );
   }
 
-  // Overlay UI builder function
   Widget _buildOverlayMessage(String message, Color bgColor, Color textColor) {
     return Container(
       color: bgColor,
       child: Center(
-        child: Text(
-          message, 
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textColor),
-        ),
+        child: Text(message, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
       ),
     );
   }
