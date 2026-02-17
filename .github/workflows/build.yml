@@ -1,0 +1,48 @@
+name: Build AdRewards Pro APK
+
+on:
+  push:
+    branches: [ "main" ] # Aapne bataya ki branch main hai
+  workflow_dispatch: # Manual button ke liye
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Code fetch karna
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Java 17 Setup (Latest v4 use kar rahe hain)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # 3. Flutter Setup
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      # 4. Clean & Get Dependencies (Clean build is safer)
+      - name: Clean & Get Dependencies
+        run: |
+          flutter clean
+          flutter pub get
+
+      # 5. Build Release APK (Website par launch karne ke liye release best hai)
+      - name: Build Release APK
+        run: flutter build apk --release --no-tree-shake-icons
+
+      # 6. Upload APK to GitHub Artifacts
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdRewards-Pro-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk

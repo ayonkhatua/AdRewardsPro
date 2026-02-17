@@ -1,0 +1,37 @@
+name: adrewards_pro
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.10.8 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Backend & Auth
+  supabase_flutter: ^2.4.0
+  google_sign_in: ^6.2.1
+  
+  # UI Design & Animations
+  google_fonts: ^6.1.0          # Modern text style ke liye
+  flutter_fortune_wheel: ^1.2.0 # Spin wheel animation ke liye
+  scratcher: ^2.4.0             # Scratch card effect ke liye
+  
+  # Monetization (Ads)
+  unity_ads_plugin: ^0.3.11     # Unity ads ke liye
+
+  # State Management (Optional par future me chahiye hoga)
+  provider: ^6.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  # Assets folder baad me yahan add karenge
+  # assets:
+  #   - assets/images/
