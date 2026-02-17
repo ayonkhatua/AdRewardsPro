@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:scratcher/scratcher.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // NAYA PACKAGE
-// import 'package:unity_ads_plugin/unity_ads_plugin.dart'; // TODO: Ads System
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 
 class ScratchScreen extends StatefulWidget {
   const ScratchScreen({super.key});
@@ -19,20 +19,101 @@ class _ScratchScreenState extends State<ScratchScreen> {
   Timer? _cooldownTimer;
   
   final int _dailyLimit = 3; 
-  int _scratchCount = 0; // TODO: Ye baad me Supabase se aayega taaki refresh par reset na ho
+  int _scratchesToday = 0;
+  bool _isLoadingData = true;
   int _currentReward = 0;
   bool _isRevealed = false;
 
   @override
   void initState() {
     super.initState();
-    _generateReward();
-    _checkSavedTimer(); // NAYA: Screen khulte hi purana timer check karega
+    _initData(); 
   }
 
-  // ==========================================
-  // NAYA LOGIC: LOCAL STORAGE TIMER
-  // ==========================================
+  Future<void> _initData() async {
+    await _fetchScratchData();
+    await _generateOrLoadReward();
+    await _checkSavedTimer();
+    setState(() => _isLoadingData = false);
+  }
+
+  Future<void> _fetchScratchData() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select('scratches_today, last_activity_date')
+          .eq('id', user.id)
+          .single();
+
+      final lastDateString = data['last_activity_date'];
+      final todayString = DateTime.now().toIso8601String().split('T')[0];
+
+      if (lastDateString != todayString) {
+        _scratchesToday = 0; 
+      } else {
+        _scratchesToday = data['scratches_today'] ?? 0;
+      }
+    } catch (e) {
+      print("Error fetching scratch data: $e");
+    }
+  }
+
+  Future<void> _generateOrLoadReward() async {
+    final prefs = await SharedPreferences.getInstance();
+    int? savedReward = prefs.getInt('pending_scratch_reward');
+
+    if (savedReward != null) {
+      _currentReward = savedReward;
+    } else {
+      // NAYA: Random coin ab 1 se lekar 15 ke beech milega
+      _currentReward = Random().nextInt(15) + 1; 
+      prefs.setInt('pending_scratch_reward', _currentReward);
+    }
+    _isRevealed = false;
+  }
+
+  Future<void> _processRewardInBackend() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final response = await Supabase.instance.client.rpc(
+        'process_scratch', 
+        params: {'user_uid': user.id, 'win_amount': _currentReward}
+      );
+
+      if (response == 'limit_reached') {
+        _showSnackBar('Daily limit reached! Come back tomorrow.', Colors.red);
+        setState(() => _scratchesToday = _dailyLimit); 
+      } else if (response == 'success') {
+        _showSnackBar('🎉 $_currentReward Coins added to your wallet!', Colors.green);
+        
+        final prefs = await SharedPreferences.getInstance();
+        prefs.remove('pending_scratch_reward');
+        
+        setState(() => _scratchesToday++); 
+        _startCooldown(); 
+      }
+    } catch (e) {
+      _showSnackBar('Error processing reward.', Colors.red);
+    }
+  }
+
+  void _showSnackBar(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  void _handleScratchComplete() {
+    if (_isRevealed) return; 
+    setState(() => _isRevealed = true);
+    _processRewardInBackend();
+  }
 
   Future<void> _checkSavedTimer() async {
     final prefs = await SharedPreferences.getInstance();
@@ -44,14 +125,9 @@ class _ScratchScreenState extends State<ScratchScreen> {
     final diffInSeconds = ((currentTime - lastScratchTimestamp) / 1000).floor();
 
     if (diffInSeconds < 60) {
-      // Agar 60 second se kam hue hain, toh bacha hua time set karo
       final remainingSeconds = 60 - diffInSeconds;
       _timerNotifier.value = remainingSeconds;
-      
-      setState(() {
-        _isRevealed = true; // Timer chal raha hai toh matlab card reveal ho chuka tha
-      });
-      
+      _isRevealed = true; 
       _startCountdownLogic();
     } else {
       prefs.remove('last_scratch_time');
@@ -63,38 +139,9 @@ class _ScratchScreenState extends State<ScratchScreen> {
     prefs.setInt('last_scratch_time', DateTime.now().millisecondsSinceEpoch);
   }
 
-  // ==========================================
-  // LOGIC SECTION
-  // ==========================================
-
-  void _generateReward() {
-    _currentReward = Random().nextInt(10) + 1;
-    _isRevealed = false;
-  }
-
-  void _handleScratchComplete() {
-    if (_isRevealed) return; 
-    
-    setState(() {
-      _isRevealed = true;
-      _scratchCount++;
-    });
-
-    // TODO: Supabase me coins update
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🎉 You won $_currentReward coins!'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-
-    _startCooldown();
-  }
-
   void _startCooldown() {
     _timerNotifier.value = 60; 
-    _saveCurrentTime(); // NAYA: Timer start hote hi time save karo
+    _saveCurrentTime(); 
     _startCountdownLogic();
   }
 
@@ -110,20 +157,15 @@ class _ScratchScreenState extends State<ScratchScreen> {
         timer.cancel();
         _timerNotifier.value = 0;
         
-        // Auto-Reset logic jab timer 0 ho
-        if (_scratchCount < _dailyLimit) {
+        if (_scratchesToday < _dailyLimit) {
           _scratchKey.currentState?.reset(duration: const Duration(milliseconds: 500));
-          _generateReward();
+          _generateOrLoadReward(); 
         }
       } else {
         _timerNotifier.value--;
       }
     });
   }
-
-  // ==========================================
-  // UI SECTION (Same as before)
-  // ==========================================
 
   @override
   Widget build(BuildContext context) {
@@ -135,33 +177,25 @@ class _ScratchScreenState extends State<ScratchScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
       ),
-      body: SafeArea(
+      body: _isLoadingData
+        ? const Center(child: CircularProgressIndicator(color: Color(0xFF6750A4)))
+        : SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
             
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Try your luck!", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFEADDFF), width: 2),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.monetization_on, color: Color(0xFF6750A4), size: 20),
-                        SizedBox(width: 5),
-                        Text("Wallet", style: TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  )
-                ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: _scratchesToday >= _dailyLimit ? Colors.red.shade100 : const Color(0xFFEADDFF),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                "Scratches Left: ${_dailyLimit - _scratchesToday} / $_dailyLimit",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: _scratchesToday >= _dailyLimit ? Colors.red : const Color(0xFF6750A4),
+                ),
               ),
             ),
 
@@ -181,7 +215,7 @@ class _ScratchScreenState extends State<ScratchScreen> {
                   borderRadius: BorderRadius.circular(17),
                   child: Stack(
                     children: [
-                      if (_scratchCount >= _dailyLimit)
+                      if (_scratchesToday >= _dailyLimit)
                         _buildOverlayMessage("DAILY LIMIT REACHED", Colors.red.shade100, Colors.red)
                       else ...[
                         Scratcher(
@@ -226,21 +260,14 @@ class _ScratchScreenState extends State<ScratchScreen> {
             ValueListenableBuilder<int>(
               valueListenable: _timerNotifier,
               builder: (context, timerValue, child) {
-                if (_scratchCount >= _dailyLimit) {
-                  return const Text("Come back tomorrow!", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold));
+                if (_scratchesToday >= _dailyLimit) {
+                  return const Text("🚫 Come back tomorrow!", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold));
                 }
                 return Text(
                   timerValue > 0 ? "⏳ Preparing next card..." : "✨ Swipe to reveal your prize!",
                   style: const TextStyle(color: Color(0xFF6750A4), fontWeight: FontWeight.bold),
                 );
               },
-            ),
-
-            const SizedBox(height: 40),
-
-            Text(
-              "Daily limits: $_scratchCount / $_dailyLimit",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF6750A4)),
             ),
           ],
         ),
