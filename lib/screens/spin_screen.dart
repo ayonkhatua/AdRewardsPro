@@ -56,7 +56,7 @@ class _SpinScreenState extends State<SpinScreen> {
           .eq('id', user.id)
           .single();
 
-      final lastDateString = data['last_activity_date'];
+      final lastDateString = data['last_activity_date']?.toString(); // Safety check
       final todayString = DateTime.now().toIso8601String().split('T')[0];
 
       if (lastDateString != todayString) {

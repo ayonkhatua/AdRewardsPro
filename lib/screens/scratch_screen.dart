@@ -223,10 +223,7 @@ class _ScratchScreenState extends State<ScratchScreen> {
                           brushSize: 45,
                           threshold: 50, 
                           color: const Color(0xFF6750A4),
-                          image: Image.network(
-                            "https://img.freepik.com/free-vector/abstract-purple-gradient-background_23-2148281137.jpg",
-                            fit: BoxFit.cover,
-                          ),
+                          // Image hata di taaki loading issue na ho. Color fast load hota hai.
                           onThreshold: _handleScratchComplete,
                           child: Center(
                             child: Column(
