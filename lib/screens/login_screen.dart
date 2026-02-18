@@ -94,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _googleSignIn() async {
     setState(() => _isLoading = true);
     try {
-      const webClientId = '1012104223725-h8fgitcn88suslhbc791lcsvjvoo6m15.apps.googleusercontent.com';
+      const webClientId = '1012104223725-bhln7pal8vhscomur2os38gqmhjhpk9t.apps.googleusercontent.com';
 
       final GoogleSignIn googleSignIn = GoogleSignIn(
         clientId: webClientId,
