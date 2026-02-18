@@ -2,8 +2,8 @@ name: Build AdRewards Pro APK
 
 on:
   push:
-    branches: [ "main" ] # Aapne bataya ki branch main hai
-  workflow_dispatch: # Manual button ke liye
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Java 17 Setup (Latest v4 use kar rahe hain)
+      # 2. Java 17 Setup
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -30,19 +30,32 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # 4. Clean & Get Dependencies (Clean build is safer)
+      # 4. Clean & Get Dependencies
       - name: Clean & Get Dependencies
         run: |
           flutter clean
           flutter pub get
 
-      # 5. Build Release APK (Website par launch karne ke liye release best hai)
+      # 5. Build Release APK
       - name: Build Release APK
         run: flutter build apk --release --no-tree-shake-icons
 
-      # 6. Upload APK to GitHub Artifacts
-      - name: Upload APK
+      # ========================================================
+      # 6. SIGN APK (YE NAYA STEP HAI - GOOGLE LOGIN FIX)
+      # ========================================================
+      - name: Sign Release APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: build/app/outputs/flutter-apk
+          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+      # 7. Upload Signed APK (Ab hum signed wala upload karenge)
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: AdRewards-Pro-Release-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: AdRewards-Pro-Signed-APK
+          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
