@@ -5,8 +5,8 @@ class SupabaseConfig {
   // ==========================================
 
   // Aapka Project URL
-  static const String url = 'https://ojpvcqnsrltwocbypcwq.supabase.co';
+  static const String url = 'https://irsiskkdkxjomhqalsbd.supabase.co';
 
   // Aapki 'anon' public API Key
-  static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qcHZjcW5zcmx0d29jYnlwY3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNjg0NDEsImV4cCI6MjA4Njc0NDQ0MX0.f0ehrBN-Tl7hIExrijuop4UclQTnSCvNOp93WE8oDPg'; 
+  static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlyc2lza2tka3hqb21ocWFsc2JkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzOTY1NzIsImV4cCI6MjA4Njk3MjU3Mn0.tDeN_owMD_MvQrg5hGQX4SBe_Dlv3m9EUt-MT_EbPik'; 
 }

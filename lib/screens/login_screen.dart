@@ -146,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       // Ensure this is the correct Web Client ID from Google Cloud Console
-      const webClientId = '1012104223725-bhln7pal8vhscomur2os38gqmhjhpk9t.apps.googleusercontent.com';
+      const webClientId = '567470905268-sh82ku8hkh0t50gl6pf4ob4p90d6kc0d.apps.googleusercontent.com';
 
       final GoogleSignIn googleSignIn = GoogleSignIn(
         clientId: null, // Android/iOS client ID should be null for new Flutter integration
