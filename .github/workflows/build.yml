@@ -36,27 +36,25 @@ jobs:
           flutter clean
           flutter pub get
 
-      # 5. Build Release APK
+      # 5. Build Release APK (Ye step build karega)
       - name: Build Release APK
         run: flutter build apk --release --no-tree-shake-icons
 
-      # ========================================================
-      # 6. SIGN APK (FIXED: Added buildTools version)
+     # ========================================================
+      # 6. SIGN APK (FIXED: Version v2 with Correct Input Names)
       # ========================================================
       - name: Sign Release APK
-        uses: r0adkll/sign-android-release@v1
+        uses: ilharp/sign-android-release@v2
         id: sign_app
         with:
-          releaseDirectory: build/app/outputs/flutter-apk
-          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
+          releaseDir: build/app/outputs/flutter-apk
+          signingKey: ${{ secrets.KEYSTORE_BASE64 }}
+          keyAlias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
-          buildTools: 34.0.0  # <--- YE LINE ERROR SOLVE KAREGI
-
       # 7. Upload Signed APK
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
           name: AdRewards-Pro-Signed-APK
-          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          path: ${{ steps.sign_app.outputs.signed_file }}
