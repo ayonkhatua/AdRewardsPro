@@ -41,7 +41,7 @@ jobs:
         run: flutter build apk --release --no-tree-shake-icons
 
       # ========================================================
-      # 6. SIGN APK (YE NAYA STEP HAI - GOOGLE LOGIN FIX)
+      # 6. SIGN APK (FIXED: Added buildTools version)
       # ========================================================
       - name: Sign Release APK
         uses: r0adkll/sign-android-release@v1
@@ -52,8 +52,9 @@ jobs:
           alias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
+          buildTools: 34.0.0  # <--- YE LINE ERROR SOLVE KAREGI
 
-      # 7. Upload Signed APK (Ab hum signed wala upload karenge)
+      # 7. Upload Signed APK
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
