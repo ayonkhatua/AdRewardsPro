@@ -41,8 +41,7 @@ jobs:
         run: flutter build apk --release --no-tree-shake-icons
 
      # ========================================================
-      # 6. SIGN APK (FIXED: Version v2 with Correct Input Names)
-      # ========================================================
+      # 6. SIGN APK (Secrets zaroori hain, hatana mat!)
       - name: Sign Release APK
         uses: ilharp/sign-android-release@v2
         id: sign_app
