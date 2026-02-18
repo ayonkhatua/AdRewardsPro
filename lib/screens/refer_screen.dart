@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:share_plus/share_plus.dart'; // TODO: pubspec.yaml mein share_plus dalne ke baad ise uncomment karein
+// TODO: pubspec.yaml mein share_plus dalne ke baad ise uncomment karein
 
 class ReferScreen extends StatefulWidget {
   const ReferScreen({super.key});
@@ -126,18 +126,18 @@ class _ReferScreenState extends State<ReferScreen> {
                     border: Border.all(color: const Color(0xFFFDE293), width: 2),
                     boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
-                  child: Column(
+                  child: const Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           Icon(Icons.security_rounded, color: Color(0xFF146C2E), size: 24),
                           SizedBox(width: 8),
                           Text("100% Verified Reward", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF146C2E))),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
+                      SizedBox(height: 12),
+                      Text(
                         "You will receive 100 Bonus Coins ONLY when your friend makes their FIRST SUCCESSFUL WITHDRAWAL.",
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Color(0xFF311300), fontSize: 14, fontWeight: FontWeight.w600, height: 1.5),

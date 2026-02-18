@@ -15,23 +15,23 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
   int _walletBalance = 0;
   int _requiredCoins = 0;
   bool _isLoading = false;
+  bool _saveUpi = false; // NAYA: Checkbox ka status track karne ke liye
   
   // Withdrawal settings
-  final int _minimumRupeeWithdrawal = 10; // Minimum ₹10 nikal sakte hain
+  final int _minimumRupeeWithdrawal = 10; 
 
   @override
   void initState() {
     super.initState();
-    _fetchWalletBalance();
+    _fetchUserData(); // Function ka naam badal diya kyunki ab ye UPI bhi layega
     
-    // Jaise hi user Rupee type karega, Coins automatically calculate honge
     _amountController.addListener(_calculateCoins);
   }
 
-  Future<void> _fetchWalletBalance() async {
+  // NAYA: Sirf balance nahi, ab Saved UPI bhi layenge
+  Future<void> _fetchUserData() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      // Testing Mode
       setState(() => _walletBalance = 5000); 
       return;
     }
@@ -39,12 +39,18 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
     try {
       final response = await Supabase.instance.client
           .from('profiles')
-          .select('wallet_balance')
+          .select('wallet_balance, saved_upi_id') // UPI ID bhi maangi
           .eq('id', user.id)
           .single();
 
       setState(() {
         _walletBalance = response['wallet_balance'] ?? 0;
+        
+        // Agar pehle se UPI saved hai, to box bhar do aur tick laga do
+        if (response['saved_upi_id'] != null && response['saved_upi_id'].toString().isNotEmpty) {
+          _upiController.text = response['saved_upi_id'];
+          _saveUpi = true;
+        }
       });
     } catch (e) {
       print("Error: $e");
@@ -54,7 +60,6 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
   void _calculateCoins() {
     final rupeeAmount = int.tryParse(_amountController.text) ?? 0;
     setState(() {
-      // Math: ₹1 = 50 Coins (Kyunki ₹2 = 100 Coins)
       _requiredCoins = rupeeAmount * 50; 
     });
   }
@@ -84,7 +89,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
       final user = Supabase.instance.client.auth.currentUser;
       
       if (user != null) {
-        // 1. Withdrawals table me request daalo (Admin ke liye asaan, amount ₹ me jayega)
+        // 1. Withdrawals table me request daalo
         await Supabase.instance.client.from('withdrawals').insert({
           'user_id': user.id,
           'amount_in_rupees': rupeeAmount,
@@ -99,15 +104,23 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
             .from('profiles')
             .update({'wallet_balance': newBalance})
             .eq('id', user.id);
+
+        // 3. NAYA: Agar User ne "Save UPI" tick kiya hai, toh profile update karo
+        if (_saveUpi) {
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'saved_upi_id': upiId}) // saved_upi_id column update hoga
+              .eq('id', user.id);
+        }
             
         setState(() => _walletBalance = newBalance);
       }
 
       _showSnackBar('Withdrawal request sent successfully!', Colors.green);
       _amountController.clear();
-      _upiController.clear();
+      // UPI clear nahi karenge agar save kiya hai to
+      if (!_saveUpi) _upiController.clear();
       
-      // Request successful hone par thodi der baad back kar do
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) Navigator.pop(context);
       });
@@ -188,7 +201,6 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
 
               const SizedBox(height: 12),
 
-              // DYNAMIC COIN CALCULATION TEXT
               Row(
                 children: [
                   const Icon(Icons.info_outline_rounded, size: 18, color: Colors.grey),
@@ -217,9 +229,36 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                   prefixIcon: const Icon(Icons.account_balance_rounded, color: Color(0xFF6750A4)),
                   filled: true,
                   fillColor: Colors.white,
-                  hintText: "e.g. enter your upi id or number",
+                  hintText: "e.g. 9876543210@paytm",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF6750A4), width: 2)),
+                ),
+              ),
+
+              // NAYA: Save UPI Checkbox
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _saveUpi = !_saveUpi;
+                  });
+                },
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: _saveUpi,
+                      activeColor: const Color(0xFF6750A4),
+                      onChanged: (val) {
+                        setState(() {
+                          _saveUpi = val ?? false;
+                        });
+                      },
+                    ),
+                    const Text(
+                      "Save for future withdrawals",
+                      style: TextStyle(color: Color(0xFF1D1B20), fontWeight: FontWeight.w500),
+                    ),
+                  ],
                 ),
               ),
 

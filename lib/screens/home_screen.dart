@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/services.dart'; // Clipboard (Copy feature) ke liye
+import 'package:flutter/services.dart'; 
 
 // Import screens
 import 'spin_screen.dart';
 import 'scratch_screen.dart';
 import 'refer_screen.dart';
 import 'withdrawal_screen.dart';
-import 'login_screen.dart'; // NAYA: Login screen import kiya
+import 'login_screen.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,7 +19,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0; 
 
-  final List<Widget> _tabs = [
+  // Tabs ki list ko getter banaya taaki 'setState' se refresh ho sake
+  List<Widget> get _tabs => [
     const HomeTab(),    
     const EarnTab(),    
     const ProfileTab(), 
@@ -38,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onDestinationSelected: (int index) {
           setState(() {
             _currentIndex = index;
+            // Jab bhi user Home ya Profile par aaye, screen refresh ho jaye
           });
         },
         destinations: const [
@@ -63,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ==========================================
-// TAB 1: HOME TAB (Modern Dashboard)
+// TAB 1: HOME TAB (Fixed Data Loading)
 // ==========================================
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -73,45 +75,27 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
-  int _walletBalance = 0;
-  String _referralCode = "LOADING...";
+  // Real-time data stream (Live Update ke liye)
+  late final Stream<Map<String, dynamic>> _userStream;
 
   @override
   void initState() {
     super.initState();
-    _fetchDashboardData();
-  }
-
-  Future<void> _fetchDashboardData() async {
     final user = Supabase.instance.client.auth.currentUser;
-    
-    // Testing Mode Fake Data
-    if (user == null) {
-      setState(() {
-        _walletBalance = 2500;
-        _referralCode = "AYON123";
-      });
-      return;
-    }
-
-    try {
-      final response = await Supabase.instance.client
+    if (user != null) {
+      // Supabase se live data sunenge
+      _userStream = Supabase.instance.client
           .from('profiles')
-          .select('wallet_balance, referral_code')
+          .stream(primaryKey: ['id'])
           .eq('id', user.id)
-          .single();
-
-      setState(() {
-        _walletBalance = response['wallet_balance'] ?? 0;
-        _referralCode = response['referral_code'] ?? "NO_CODE";
-      });
-    } catch (e) {
-      print("Error fetching home data: $e");
+          .map((data) => data.isNotEmpty ? data.first : {});
+    } else {
+      _userStream = Stream.value({}); // Empty stream for testing
     }
   }
 
-  void _copyReferralCode() {
-    Clipboard.setData(ClipboardData(text: _referralCode));
+  void _copyReferralCode(String code) {
+    Clipboard.setData(ClipboardData(text: code));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Referral Code Copied!'), behavior: SnackBarBehavior.floating),
     );
@@ -119,144 +103,156 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Dashboard",
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1D1B20)),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(100),
-                    border: Border.all(color: const Color(0xFFEADDFF), width: 2),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.monetization_on, color: Color(0xFF6750A4), size: 20),
-                      const SizedBox(width: 6),
-                      Text(
-                        "$_walletBalance",
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF6750A4)),
-                      ),
-                    ],
-                  ),
-                )
-              ],
-            ),
-          ),
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: _userStream,
+      builder: (context, snapshot) {
+        // Default values agar data load ho raha ho
+        int walletBalance = 0;
+        String referralCode = "LOADING...";
 
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 24, offset: const Offset(0, 4))],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 56, height: 56,
-                  decoration: BoxDecoration(color: const Color(0xFFE8DEF8), borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Icons.account_balance_wallet, color: Color(0xFF1D192B), size: 28),
-                ),
-                const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+          walletBalance = snapshot.data!['wallet_balance'] ?? 0;
+          referralCode = snapshot.data!['referral_code'] ?? "Generating...";
+        }
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // HEADER
+              Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("Available Balance", style: TextStyle(color: Color(0xFF79747E), fontSize: 14)),
-                    Text("$_walletBalance", style: const TextStyle(color: Color(0xFF6750A4), fontSize: 32, fontWeight: FontWeight.bold)),
+                    const Text(
+                      "Dashboard",
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1D1B20)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(color: const Color(0xFFEADDFF), width: 2),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.monetization_on, color: Color(0xFF6750A4), size: 20),
+                          const SizedBox(width: 6),
+                          Text(
+                            "$walletBalance",
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF6750A4)),
+                          ),
+                        ],
+                      ),
+                    )
                   ],
                 ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context, 
-                MaterialPageRoute(builder: (_) => const ReferScreen())
-              );
-            },
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 24, offset: const Offset(0, 4))
-                ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Invite & Earn", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1D1B20))),
-                  const SizedBox(height: 4),
-                  const Text("Share your code to earn bonuses.", style: TextStyle(color: Color(0xFF79747E), fontSize: 14)),
-                  const SizedBox(height: 16),
-                  
-                  Container(
-                    padding: const EdgeInsets.only(left: 16, right: 8, top: 8, bottom: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFDF8FD),
-                      border: Border.all(color: const Color(0xFFEADDFF)),
-                      borderRadius: BorderRadius.circular(12),
+
+              // BALANCE CARD
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 24, offset: const Offset(0, 4))],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 56, height: 56,
+                      decoration: BoxDecoration(color: const Color(0xFFE8DEF8), borderRadius: BorderRadius.circular(16)),
+                      child: const Icon(Icons.account_balance_wallet, color: Color(0xFF1D192B), size: 28),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_referralCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.5)),
-                        IconButton(
-                          onPressed: () {
-                            _copyReferralCode(); 
-                          },
-                          icon: const Icon(Icons.copy_rounded, color: Color(0xFF6750A4)),
-                          splashRadius: 20,
-                        )
+                        const Text("Available Balance", style: TextStyle(color: Color(0xFF79747E), fontSize: 14)),
+                        Text("$walletBalance", style: const TextStyle(color: Color(0xFF6750A4), fontSize: 32, fontWeight: FontWeight.bold)),
                       ],
                     ),
-                  )
-                ],
+                  ],
+                ),
               ),
-            ),
-          ),
 
-          const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Text("Bonus Tasks", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF79747E))),
+              // INVITE CARD
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferScreen()));
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 24, offset: const Offset(0, 4))
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Invite & Earn", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1D1B20))),
+                      const SizedBox(height: 4),
+                      const Text("Share your code to earn bonuses.", style: TextStyle(color: Color(0xFF79747E), fontSize: 14)),
+                      const SizedBox(height: 16),
+                      
+                      Container(
+                        padding: const EdgeInsets.only(left: 16, right: 8, top: 8, bottom: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDF8FD),
+                          border: Border.all(color: const Color(0xFFEADDFF)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(referralCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.5)),
+                            IconButton(
+                              onPressed: () => _copyReferralCode(referralCode),
+                              icon: const Icon(Icons.copy_rounded, color: Color(0xFF6750A4)),
+                              splashRadius: 20,
+                            )
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text("Bonus Tasks", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF79747E))),
+              ),
+              const SizedBox(height: 16),
+              
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: Text("No tasks available right now.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Text("No tasks available right now.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
 // ==========================================
-// TAB 2: EARN TAB (Modern Horizontal Cards)
+//// ==========================================
+// TAB 2: EARN TAB (Fixed onTap Error)
 // ==========================================
 class EarnTab extends StatelessWidget {
   const EarnTab({super.key});
@@ -268,7 +264,8 @@ class EarnTab extends StatelessWidget {
     required IconData icon,
     required Color iconBgColor,
     required Color iconColor,
-    required VoidCallback onTap,
+    // ERROR FIX: 'VoidCallback' ki jagah ye use karenge taaki await kaam kare
+    required Future<void> Function() onTap, 
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -287,7 +284,10 @@ class EarnTab extends StatelessWidget {
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         subtitle: Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
         trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-        onTap: onTap,
+        onTap: () async {
+          // Ab ye line error nahi degi
+          await onTap(); 
+        }, 
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );
@@ -309,7 +309,8 @@ class EarnTab extends StatelessWidget {
             icon: Icons.casino_rounded,
             iconBgColor: const Color(0xFFFFDBCB), 
             iconColor: const Color(0xFF311300),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SpinScreen())),
+            // Navigator push Future return karta hai, jo ab match karega
+            onTap: () async => await Navigator.push(context, MaterialPageRoute(builder: (_) => const SpinScreen())),
           ),
           _buildListCard(
             context: context,
@@ -318,16 +319,15 @@ class EarnTab extends StatelessWidget {
             icon: Icons.style_rounded,
             iconBgColor: const Color(0xFFC4EED0), 
             iconColor: const Color(0xFF00210C),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScratchScreen())),
+            onTap: () async => await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScratchScreen())),
           ),
         ],
       ),
     );
   }
 }
-
 // ==========================================
-// TAB 3: PROFILE TAB (User Info + Withdrawal)
+// TAB 3: PROFILE TAB (Fixed Stream for Live Balance)
 // ==========================================
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
@@ -335,95 +335,107 @@ class ProfileTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
-    final email = user?.email ?? 'No Email (Testing)';
+    final email = user?.email ?? 'No Email';
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Profile", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1D1B20))),
-          const SizedBox(height: 20),
-          
-          Center(
-            child: Column(
-              children: [
-                const CircleAvatar(radius: 40, backgroundColor: Color(0xFFEADDFF), child: Icon(Icons.person, size: 40, color: Color(0xFF6750A4))),
-                const SizedBox(height: 10),
-                Text(email, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 30),
+    // Profile Tab par bhi Live Data dikhana zaroori hai
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: Supabase.instance.client
+          .from('profiles')
+          .stream(primaryKey: ['id'])
+          .eq('id', user?.id ?? '')
+          .map((data) => data.isNotEmpty ? data.first : {}),
+      builder: (context, snapshot) {
+        
+        // Agar data load ho raha hai toh 0 dikhao
+        int liveBalance = 0;
+        if (snapshot.hasData && snapshot.data != null) {
+          liveBalance = snapshot.data!['wallet_balance'] ?? 0;
+        }
 
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8DEF8), 
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFD0BCFF), width: 1),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded, color: Color(0xFF6750A4), size: 28),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text("Coin Value", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1D192B), fontSize: 16)),
-                      SizedBox(height: 2),
-                      Text("100 Coins = ₹2", style: TextStyle(color: Color(0xFF49454F), fontSize: 14, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 20),
-
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              leading: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF6750A4), size: 30),
-              title: const Text('Withdraw Funds', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              subtitle: const Text('Transfer to UPI / Paytm', style: TextStyle(color: Colors.grey, fontSize: 12)),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WithdrawalScreen())),
-            ),
-          ),
-          
-          const SizedBox(height: 20),
-          
-          const Text("Settings", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF79747E))),
-          const SizedBox(height: 10),
-          
-          // NAYA LOGOUT LOGIC (Perfect Routing ke sath)
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: Colors.red),
-            title: const Text('Logout', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-            onTap: () async {
-              // 1. Supabase se session khatam karo
-              await Supabase.instance.client.auth.signOut();
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Profile", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1D1B20))),
+              const SizedBox(height: 20),
               
-              // 2. Turant Login screen par bhej do
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
-              }
-            },
+              Center(
+                child: Column(
+                  children: [
+                    const CircleAvatar(radius: 40, backgroundColor: Color(0xFFEADDFF), child: Icon(Icons.person, size: 40, color: Color(0xFF6750A4))),
+                    const SizedBox(height: 10),
+                    Text(email, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 30),
+
+              // Coin Value Banner
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8DEF8), 
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFD0BCFF), width: 1),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: Color(0xFF6750A4), size: 28),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Coin Value", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1D192B), fontSize: 16)),
+                          SizedBox(height: 2),
+                          Text("100 Coins = ₹2", style: TextStyle(color: Color(0xFF49454F), fontSize: 14, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+
+              // Withdrawal Card (Live Balance Pass karne ki zaroorat nahi, screen khud fetch karegi)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  leading: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF6750A4), size: 30),
+                  title: const Text('Withdraw Funds', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  subtitle: Text('Balance: $liveBalance Coins', style: const TextStyle(color: Colors.grey, fontSize: 12)), // Yahan bhi balance dikha diya
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WithdrawalScreen())),
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+              
+              const Text("Settings", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF79747E))),
+              const SizedBox(height: 10),
+              
+              ListTile(
+                leading: const Icon(Icons.logout_rounded, color: Colors.red),
+                title: const Text('Logout', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                onTap: () async {
+                  await Supabase.instance.client.auth.signOut();
+                  if(context.mounted) {
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+                  }
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
