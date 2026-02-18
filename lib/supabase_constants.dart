@@ -3,7 +3,7 @@ class SupabaseConfig {
   // Ye aapko Supabase Dashboard -> Settings -> API me milengi
   // ==========================================
 
-  // Aapka Project URL
+  // Project URL
   static const String url = 'https://irsiskkdkxjomhqalsbd.supabase.co';
 
   // Aapki 'anon' public API Key
