@@ -21,9 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isLoginMode = true; // Toggle Login/Signup
   
-  // NAYA: Logs store karne ke liye list
-  List<String> _logs = [];
-
   final supabase = Supabase.instance.client;
 
   @override
@@ -35,18 +32,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ==========================================
-  // 1. ON-SCREEN LOGGER FUNCTION
-  // ==========================================
-  void _addLog(String message) {
-    // Current time ke sath message add karega
-    String timestamp = "${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}";
-    setState(() {
-      _logs.insert(0, "[$timestamp] $message"); // Newest log upar aayega
-    });
-    print("DEBUG: $message"); // Console me bhi print karega
-  }
-
-  // ==========================================
   // 2. EMAIL AUTH LOGIC
   // ==========================================
   Future<void> _handleAuth() async {
@@ -54,11 +39,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text.trim();
     final referralCode = _referralController.text.trim();
 
-    _addLog("Starting Email Auth...");
-
     if (email.isEmpty || password.length < 6) {
-      _addLog("❌ Validation Error: Email empty or Password < 6 chars");
-      _showSnackBar('Check inputs', Colors.orange);
+      _showSnackBar('Please enter a valid email and password (min 6 chars)', Colors.orange);
       return;
     }
 
@@ -67,26 +49,17 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       if (_isLoginMode) {
         // --- LOGIN ---
-        _addLog("Attempting SignIn for: $email");
         await supabase.auth.signInWithPassword(email: email, password: password);
-        _addLog("✅ Login Successful!");
         _navigateToHome();
       } else {
         // --- SIGNUP ---
-        _addLog("Attempting SignUp for: $email");
         final AuthResponse res = await supabase.auth.signUp(email: email, password: password);
         
-        _addLog("✅ SignUp Auth Response Received.");
-        
         if (res.user != null) {
-          _addLog("User Created: ${res.user!.id}");
-          
           if (referralCode.isNotEmpty) {
-             _addLog("Processing Referral: $referralCode");
              await _processReferralCode(res.user!.id, referralCode);
           }
           
-          _addLog("✅ Process Complete. Switch to Login.");
           _showSnackBar('Account created! Please Login.', Colors.green);
           setState(() {
             _isLoginMode = true;
@@ -94,16 +67,15 @@ class _LoginScreenState extends State<LoginScreen> {
             _passwordController.clear();
           });
         } else {
-           _addLog("⚠️ Warning: User object is null after signup.");
+           _showSnackBar('Signup failed. Please try again.', Colors.red);
         }
       }
     } on AuthException catch (e) {
-      _addLog("🛑 Supabase Auth Error: ${e.message}");
-      _addLog("Status Code: ${e.statusCode}");
+      _showSnackBar(e.message, Colors.red);
     } catch (e) {
-      _addLog("🛑 Unexpected Error: $e");
+      _showSnackBar('An unexpected error occurred.', Colors.red);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -119,12 +91,11 @@ class _LoginScreenState extends State<LoginScreen> {
         await supabase.from('profiles').update({
           'referred_by': response['id']
         }).eq('id', newUserId);
-        _addLog("Referral Linked Successfully.");
       } else {
-        _addLog("Invalid Referral Code.");
+        print("Invalid Referral Code.");
       }
     } catch (e) {
-      _addLog("Referral Logic Error: $e");
+      print("Referral Logic Error: $e");
     }
   }
 
@@ -132,7 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
   // 3. GOOGLE SIGN-IN LOGIC (DIAGNOSTIC)
   // ==========================================
   Future<void> _googleSignIn() async {
-    _addLog("🚀 Google Sign-In Started...");
     setState(() => _isLoading = true);
     try {
       // Is Web Client ID ko replace mat karna
@@ -143,50 +113,35 @@ class _LoginScreenState extends State<LoginScreen> {
         serverClientId: webClientId,
       );
 
-      _addLog("Step 1: Launching Google Popup...");
       final googleUser = await googleSignIn.signIn();
       
       if (googleUser == null) {
-        _addLog("⚠️ User Cancelled Google Login.");
         setState(() => _isLoading = false);
         return; 
       }
-      _addLog("Google User Selected: ${googleUser.email}");
 
-      _addLog("Step 2: Retrieving Tokens...");
       final googleAuth = await googleUser.authentication;
       final accessToken = googleAuth.accessToken;
       final idToken = googleAuth.idToken;
 
-      _addLog("🔑 Access Token: ${accessToken != null ? 'OK' : 'NULL'}");
-      _addLog("🔑 ID Token: ${idToken != null ? 'OK' : 'NULL'}");
-
       if (idToken == null) {
-        _addLog("❌ FATAL ERROR: ID Token is NULL.");
-        _addLog("👉 Check SHA-1 in Google Cloud Console.");
         throw 'ID Token Missing';
       }
 
-      _addLog("Step 3: Authenticating with Supabase...");
       await supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
         accessToken: accessToken,
       );
 
-      _addLog("✅ Supabase Login Success!");
       _navigateToHome();
 
     } on PlatformException catch (e) {
-      _addLog("🛑 Platform Exception: ${e.code}");
-      _addLog("Message: ${e.message}");
-      if (e.code == 'sign_in_failed') {
-         _addLog("👉 HINT: This is Error 10. Check SHA-1 & Support Email.");
-      }
+      _showSnackBar('Google Sign-In Error: ${e.message}', Colors.red);
     } on AuthException catch (e) {
-      _addLog("🛑 Supabase Rejected: ${e.message}");
+      _showSnackBar(e.message, Colors.red);
     } catch (e) {
-      _addLog("🛑 Crash: $e");
+      _showSnackBar('Login Failed: $e', Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -212,10 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // --- MAIN BACKGROUND & CONTENT ---
-          Container(
+      body: Container(
             width: double.infinity,
             height: double.infinity,
             decoration: const BoxDecoration(
@@ -225,9 +177,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
               ),
             ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 60, 24, 250), // Bottom padding for logs
-              child: Column(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Logo
                   Container(
@@ -238,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 20),
                   Text(
                     _isLoginMode ? 'Welcome Back!' : 'Create Account',
-                    style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   const SizedBox(height: 30),
 
@@ -248,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 5))],
                     ),
                     child: Column(
                       children: [
@@ -257,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: 'Email Address',
                             prefixIcon: Icon(Icons.email_outlined, color: Colors.purple.shade300),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                             filled: true, fillColor: Colors.grey.shade100,
                           ),
                         ),
@@ -268,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: 'Password',
                             prefixIcon: Icon(Icons.lock_outline, color: Colors.purple.shade300),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                             filled: true, fillColor: Colors.grey.shade100,
                           ),
                         ),
@@ -279,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'Referral Code (Optional)',
                               prefixIcon: Icon(Icons.group_add_outlined, color: Colors.purple.shade300),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                               filled: true, fillColor: Colors.grey.shade100,
                             ),
                           ),
@@ -302,7 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 10),
                         TextButton(
                           onPressed: () => setState(() => _isLoginMode = !_isLoginMode),
-                          child: Text(_isLoginMode ? "Create Account" : "Login", style: const TextStyle(fontWeight: FontWeight.bold)),
+                          child: Text(_isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Login", style: const TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -315,7 +269,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 55,
                     child: ElevatedButton.icon(
                       onPressed: _isLoading ? null : _googleSignIn,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white, 
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                       icon: const Icon(Icons.g_mobiledata, size: 40, color: Colors.red), 
                       label: Text('Sign in with Google', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
                     ),
@@ -324,58 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-
-          // --- DEBUG CONSOLE (OVERLAY AT BOTTOM) ---
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              height: 220,
-              width: double.infinity,
-              color: Colors.black.withOpacity(0.85),
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("🛠️ DEBUG CONSOLE", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 14)),
-                      GestureDetector(
-                        onTap: () => setState(() => _logs.clear()),
-                        child: const Icon(Icons.delete, color: Colors.white54, size: 20),
-                      )
-                    ],
-                  ),
-                  const Divider(color: Colors.greenAccent, height: 10),
-                  Expanded(
-                    child: _logs.isEmpty 
-                      ? const Center(child: Text("Waiting for action...", style: TextStyle(color: Colors.white30)))
-                      : ListView.builder(
-                          itemCount: _logs.length,
-                          itemBuilder: (context, index) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2.0),
-                              child: Text(
-                                _logs[index],
-                                style: TextStyle(
-                                  color: _logs[index].contains("✅") ? Colors.greenAccent 
-                                       : _logs[index].contains("🛑") || _logs[index].contains("❌") ? Colors.redAccent 
-                                       : _logs[index].contains("🔑") ? Colors.amberAccent
-                                       : Colors.white,
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                  ),
-                ],
-              ),
-            ),
           ),
-        ],
-      ),
     );
   }
 }
