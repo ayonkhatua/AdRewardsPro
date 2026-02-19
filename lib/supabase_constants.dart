@@ -1,5 +1,6 @@
 class SupabaseConfig {
   // TODO: Yahan apni asli details replace karein
+  
   // Ye aapko Supabase Dashboard -> Settings -> API me milengi.
   // ==========================================
 
