@@ -8,6 +8,7 @@ import 'scratch_screen.dart';
 import 'refer_screen.dart';
 import 'withdrawal_screen.dart';
 import 'login_screen.dart'; 
+import 'transaction_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -421,6 +422,15 @@ class ProfileTab extends StatelessWidget {
               
               const Text("Settings", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF79747E))),
               const SizedBox(height: 10),
+              
+              ListTile(
+                leading: const Icon(Icons.receipt_long_rounded, color: Color(0xFF6750A4)),
+                title: const Text('Transactions', style: TextStyle(fontWeight: FontWeight.bold)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const TransactionScreen()));
+                },
+              ),
               
               ListTile(
                 leading: const Icon(Icons.logout_rounded, color: Colors.red),
