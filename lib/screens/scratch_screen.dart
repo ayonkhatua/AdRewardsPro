@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:scratcher/scratcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:unity_ads_plugin/unity_ads_plugin.dart'; 
+
+// 👇 NAYA: Apna model import kiya
+import '../models/app_settings_model.dart';
 
 class ScratchScreen extends StatefulWidget {
   const ScratchScreen({super.key});
@@ -24,6 +28,12 @@ class _ScratchScreenState extends State<ScratchScreen> {
   int _currentReward = 0;
   bool _isRevealed = false;
 
+  // Admin control ke liye variables
+  int _minReward = 1;
+  int _maxReward = 15;
+  bool _adsEnabled = true; 
+  bool _isAdWatched = false; 
+
   @override
   void initState() {
     super.initState();
@@ -32,6 +42,7 @@ class _ScratchScreenState extends State<ScratchScreen> {
 
   Future<void> _initData() async {
     await _fetchScratchData();
+    await _fetchAdminSettings(); // 👈 Update kiya hua function call hoga
     await _generateOrLoadReward();
     await _checkSavedTimer();
     setState(() => _isLoadingData = false);
@@ -57,7 +68,43 @@ class _ScratchScreenState extends State<ScratchScreen> {
         _scratchesToday = data['scratches_today'] ?? 0;
       }
     } catch (e) {
-      print("Error fetching scratch data: $e");
+      debugPrint("Error fetching scratch data: $e");
+    }
+  }
+
+  // ==========================================
+  // 👇 1. UPDATE: MODEL KA USE KARKE SETTINGS LAANA
+  // ==========================================
+  Future<void> _fetchAdminSettings() async {
+    try {
+      // Data laya gaya
+      final response = await Supabase.instance.client
+          .from('app_settings')
+          .select()
+          .single();
+
+      // Model mein convert kiya
+      final settings = AppSettingsModel.fromJson(response);
+
+      if (mounted) {
+        setState(() {
+          // Model se safely values assign ki
+          _minReward = settings.minScratchReward;
+          _maxReward = settings.maxScratchReward;
+          _adsEnabled = settings.adsEnabled;
+          
+          if (!_adsEnabled) {
+            _isAdWatched = true; 
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching admin settings. Error: $e");
+      if (mounted) {
+        setState(() {
+          _isAdWatched = true; // Error hone par block na ho
+        });
+      }
     }
   }
 
@@ -68,8 +115,11 @@ class _ScratchScreenState extends State<ScratchScreen> {
     if (savedReward != null) {
       _currentReward = savedReward;
     } else {
-      // NAYA: Random coin ab 1 se lekar 15 ke beech milega
-      _currentReward = Random().nextInt(15) + 1; 
+      if (_maxReward > _minReward) {
+        _currentReward = _minReward + Random().nextInt((_maxReward - _minReward) + 1);
+      } else {
+        _currentReward = _minReward; 
+      }
       prefs.setInt('pending_scratch_reward', _currentReward);
     }
     _isRevealed = false;
@@ -94,12 +144,37 @@ class _ScratchScreenState extends State<ScratchScreen> {
         final prefs = await SharedPreferences.getInstance();
         prefs.remove('pending_scratch_reward');
         
-        setState(() => _scratchesToday++); 
+        setState(() {
+           _scratchesToday++;
+           if (_adsEnabled) _isAdWatched = false; 
+        }); 
         _startCooldown(); 
       }
     } catch (e) {
       _showSnackBar('Error processing reward.', Colors.red);
     }
+  }
+
+  void _showUnityVideoAd() {
+    _showSnackBar("Loading Ad...", Colors.blue);
+    
+    UnityAds.showVideoAd(
+      placementId: 'Rewarded_Android', 
+      onStart: (placementId) => debugPrint('Ad Started'),
+      onComplete: (placementId) {
+        debugPrint('✅ Ad watched fully. Unlock Scratch Card!');
+        setState(() {
+          _isAdWatched = true; 
+        });
+      },
+      onFailed: (placementId, error, message) {
+        debugPrint('❌ Ad Failed: $message');
+        _showSnackBar('Failed to load ad. Please try again later.', Colors.red);
+      },
+      onSkipped: (placementId) {
+         _showSnackBar('You skipped the ad! Reward not unlocked.', Colors.orange);
+      }
+    );
   }
 
   void _showSnackBar(String msg, Color color) {
@@ -217,13 +292,27 @@ class _ScratchScreenState extends State<ScratchScreen> {
                     children: [
                       if (_scratchesToday >= _dailyLimit)
                         _buildOverlayMessage("DAILY LIMIT REACHED", Colors.red.shade100, Colors.red)
+                      else if (_adsEnabled && !_isAdWatched && _timerNotifier.value == 0)
+                        Container(
+                          color: const Color(0xFF6750A4).withOpacity(0.9),
+                          child: Center(
+                            child: ElevatedButton.icon(
+                              onPressed: _showUnityVideoAd,
+                              icon: const Icon(Icons.play_circle_fill),
+                              label: const Text("Watch Ad to Unlock"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF6750A4),
+                              ),
+                            ),
+                          ),
+                        )
                       else ...[
                         Scratcher(
                           key: _scratchKey,
                           brushSize: 45,
                           threshold: 50, 
                           color: const Color(0xFF6750A4),
-                          // Image hata di taaki loading issue na ho. Color fast load hota hai.
                           onThreshold: _handleScratchComplete,
                           child: Center(
                             child: Column(
@@ -259,6 +348,9 @@ class _ScratchScreenState extends State<ScratchScreen> {
               builder: (context, timerValue, child) {
                 if (_scratchesToday >= _dailyLimit) {
                   return const Text("🚫 Come back tomorrow!", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold));
+                }
+                if (_adsEnabled && !_isAdWatched && timerValue == 0) {
+                  return const Text("📺 Watch a short video to play!", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold));
                 }
                 return Text(
                   timerValue > 0 ? "⏳ Preparing next card..." : "✨ Swipe to reveal your prize!",

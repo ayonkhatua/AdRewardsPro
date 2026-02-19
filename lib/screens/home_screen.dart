@@ -10,6 +10,9 @@ import 'withdrawal_screen.dart';
 import 'login_screen.dart'; 
 import 'transaction_screen.dart';
 
+// 👇 UPDATE: Admin dashboard ko import kar liya
+import '../admin/admin_dashboard.dart'; 
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -40,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
         onDestinationSelected: (int index) {
           setState(() {
             _currentIndex = index;
-            // Jab bhi user Home ya Profile par aaye, screen refresh ho jaye
           });
         },
         destinations: const [
@@ -66,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ==========================================
-// TAB 1: HOME TAB (Fixed Data Loading)
+// TAB 1: HOME TAB (With Secret Admin Check)
 // ==========================================
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -76,22 +78,43 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
-  // Real-time data stream (Live Update ke liye)
   late final Stream<Map<String, dynamic>> _userStream;
+  bool _isAdmin = false; 
 
   @override
   void initState() {
     super.initState();
     final user = Supabase.instance.client.auth.currentUser;
     if (user != null) {
-      // Supabase se live data sunenge
       _userStream = Supabase.instance.client
           .from('profiles')
           .stream(primaryKey: ['id'])
           .eq('id', user.id)
           .map((data) => data.isNotEmpty ? data.first : {});
+          
+      // Background me admin check call kiya
+      _checkAdminStatus(user.email);
     } else {
-      _userStream = Stream.value({}); // Empty stream for testing
+      _userStream = Stream.value({}); 
+    }
+  }
+
+  // Supabase se admin email match karne ka logic
+  Future<void> _checkAdminStatus(String? userEmail) async {
+    if (userEmail == null) return;
+    try {
+      final response = await Supabase.instance.client
+          .from('app_settings')
+          .select('admin_email')
+          .single();
+          
+      if (mounted && response['admin_email'] == userEmail) {
+        setState(() {
+          _isAdmin = true;
+        });
+      }
+    } catch (e) {
+      debugPrint("Admin check error: $e");
     }
   }
 
@@ -107,7 +130,6 @@ class _HomeTabState extends State<HomeTab> {
     return StreamBuilder<Map<String, dynamic>>(
       stream: _userStream,
       builder: (context, snapshot) {
-        // Default values agar data load ho raha ho
         int walletBalance = 0;
         String referralCode = "LOADING...";
 
@@ -126,9 +148,25 @@ class _HomeTabState extends State<HomeTab> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      "Dashboard",
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1D1B20)),
+                    // Dashboard Title aur Admin Button ek sath
+                    Row(
+                      children: [
+                        const Text(
+                          "Dashboard",
+                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1D1B20)),
+                        ),
+                        if (_isAdmin) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.admin_panel_settings, color: Colors.orange),
+                            tooltip: 'Admin Panel',
+                            onPressed: () {
+                              // 👇 UPDATE: Ab yahan se direct Admin Dashboard khulega
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboard()));
+                            },
+                          ),
+                        ],
+                      ],
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -252,8 +290,7 @@ class _HomeTabState extends State<HomeTab> {
 }
 
 // ==========================================
-//// ==========================================
-// TAB 2: EARN TAB (Fixed onTap Error)
+// TAB 2: EARN TAB
 // ==========================================
 class EarnTab extends StatelessWidget {
   const EarnTab({super.key});
@@ -265,7 +302,6 @@ class EarnTab extends StatelessWidget {
     required IconData icon,
     required Color iconBgColor,
     required Color iconColor,
-    // ERROR FIX: 'VoidCallback' ki jagah ye use karenge taaki await kaam kare
     required Future<void> Function() onTap, 
   }) {
     return Container(
@@ -286,7 +322,6 @@ class EarnTab extends StatelessWidget {
         subtitle: Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
         trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
         onTap: () async {
-          // Ab ye line error nahi degi
           await onTap(); 
         }, 
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -310,7 +345,6 @@ class EarnTab extends StatelessWidget {
             icon: Icons.casino_rounded,
             iconBgColor: const Color(0xFFFFDBCB), 
             iconColor: const Color(0xFF311300),
-            // Navigator push Future return karta hai, jo ab match karega
             onTap: () async => await Navigator.push(context, MaterialPageRoute(builder: (_) => const SpinScreen())),
           ),
           _buildListCard(
@@ -327,8 +361,9 @@ class EarnTab extends StatelessWidget {
     );
   }
 }
+
 // ==========================================
-// TAB 3: PROFILE TAB (Fixed Stream for Live Balance)
+// TAB 3: PROFILE TAB
 // ==========================================
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
@@ -338,7 +373,6 @@ class ProfileTab extends StatelessWidget {
     final user = Supabase.instance.client.auth.currentUser;
     final email = user?.email ?? 'No Email';
 
-    // Profile Tab par bhi Live Data dikhana zaroori hai
     return StreamBuilder<Map<String, dynamic>>(
       stream: Supabase.instance.client
           .from('profiles')
@@ -347,7 +381,6 @@ class ProfileTab extends StatelessWidget {
           .map((data) => data.isNotEmpty ? data.first : {}),
       builder: (context, snapshot) {
         
-        // Agar data load ho raha hai toh 0 dikhao
         int liveBalance = 0;
         if (snapshot.hasData && snapshot.data != null) {
           liveBalance = snapshot.data!['wallet_balance'] ?? 0;
@@ -401,7 +434,6 @@ class ProfileTab extends StatelessWidget {
               
               const SizedBox(height: 20),
 
-              // Withdrawal Card (Live Balance Pass karne ki zaroorat nahi, screen khud fetch karegi)
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -412,7 +444,7 @@ class ProfileTab extends StatelessWidget {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   leading: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF6750A4), size: 30),
                   title: const Text('Withdraw Funds', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  subtitle: Text('Balance: $liveBalance Coins', style: const TextStyle(color: Colors.grey, fontSize: 12)), // Yahan bhi balance dikha diya
+                  subtitle: Text('Balance: $liveBalance Coins', style: const TextStyle(color: Colors.grey, fontSize: 12)), 
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WithdrawalScreen())),
                 ),

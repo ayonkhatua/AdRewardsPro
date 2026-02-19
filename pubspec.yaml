@@ -28,6 +28,7 @@ dependencies:
   # State Management (Optional par future me chahiye hoga)
   provider: ^6.1.1
   share_plus: ^12.0.1
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -36,6 +37,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  # 👇 Bilkul aise hi spacing honi chahiye
+  assets:
+    - .env
+
   # Assets folder baad me yahan add karenge
-  # assets:
   #   - assets/images/

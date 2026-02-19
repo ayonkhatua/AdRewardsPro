@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_fortune_wheel/flutter_fortune_wheel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:unity_ads_plugin/unity_ads_plugin.dart'; 
+
+// 👇 NAYA: Apna model import kiya
+import '../models/app_settings_model.dart';
 
 class SpinScreen extends StatefulWidget {
   const SpinScreen({super.key});
@@ -19,12 +23,15 @@ class _SpinScreenState extends State<SpinScreen> {
   Timer? _cooldownTimer;
   
   // Backend Limits & Data
-  final int _dailyLimit = 5; // WAPAS 5 KAR DIYA HAI
+  final int _dailyLimit = 5; 
   int _spinsToday = 0;
   bool _isLoadingData = true;
   int _winningIndex = 0; 
+
+  // Admin control ke variables
+  bool _adsEnabled = true;
+  bool _isAdWatched = false;
   
-  // NAYA: Coins ki limit badal kar max 15 kar di hai
   final List<int> rewards = [2, 5, 8, 10, 12, 15]; 
   
   final List<Color> segmentColors = const [
@@ -40,9 +47,45 @@ class _SpinScreenState extends State<SpinScreen> {
 
   Future<void> _initData() async {
     await _fetchSpinData();
+    await _fetchAdminSettings(); // 👈 Update kiya hua function
     await _generateOrLoadSpinIndex(); 
     await _checkSavedTimer();
     setState(() => _isLoadingData = false);
+  }
+
+  // ==========================================
+  // 👇 UPDATE: MODEL KA USE KARKE SETTINGS LAANA
+  // ==========================================
+  Future<void> _fetchAdminSettings() async {
+    try {
+      // Data laya gaya
+      final response = await Supabase.instance.client
+          .from('app_settings')
+          .select()
+          .single();
+
+      // Model mein convert kiya
+      final settings = AppSettingsModel.fromJson(response);
+
+      if (mounted) {
+        setState(() {
+          // Model se safely value nikali
+          _adsEnabled = settings.adsEnabled;
+          
+          // Agar ads band hain, toh maan lo ad dekh liya taaki spin ho sake
+          if (!_adsEnabled) {
+            _isAdWatched = true; 
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching admin settings. Error: $e");
+      if (mounted) {
+        setState(() {
+          _isAdWatched = true; // DB Error aaye toh user block na ho
+        });
+      }
+    }
   }
 
   Future<void> _fetchSpinData() async {
@@ -56,7 +99,7 @@ class _SpinScreenState extends State<SpinScreen> {
           .eq('id', user.id)
           .single();
 
-      final lastDateString = data['last_activity_date']?.toString(); // Safety check
+      final lastDateString = data['last_activity_date']?.toString(); 
       final todayString = DateTime.now().toIso8601String().split('T')[0];
 
       if (lastDateString != todayString) {
@@ -65,7 +108,7 @@ class _SpinScreenState extends State<SpinScreen> {
         _spinsToday = data['spins_today'] ?? 0;
       }
     } catch (e) {
-      print("Error fetching spin data: $e");
+      debugPrint("Error fetching spin data: $e");
     }
   }
 
@@ -100,12 +143,39 @@ class _SpinScreenState extends State<SpinScreen> {
         final prefs = await SharedPreferences.getInstance();
         prefs.remove('pending_spin_index');
 
-        setState(() => _spinsToday++); 
+        setState(() {
+           _spinsToday++;
+           // Agle spin ke liye ad fir se dekhna padega (agar ads on hain)
+           if (_adsEnabled) _isAdWatched = false; 
+        }); 
         _startCooldown(); 
       }
     } catch (e) {
       _showSnackBar('Error processing reward.', Colors.red);
     }
+  }
+
+  void _showUnityVideoAd() {
+    _showSnackBar("Loading Ad...", Colors.blue);
+    
+    UnityAds.showVideoAd(
+      placementId: 'Rewarded_Android', 
+      onStart: (placementId) => debugPrint('Ad Started'),
+      onComplete: (placementId) {
+        debugPrint('✅ Ad watched fully. Auto-Spinning now!');
+        setState(() {
+          _isAdWatched = true; 
+        });
+        _startSpin();
+      },
+      onFailed: (placementId, error, message) {
+        debugPrint('❌ Ad Failed: $message');
+        _showSnackBar('Failed to load ad. Please try again later.', Colors.red);
+      },
+      onSkipped: (placementId) {
+         _showSnackBar('You skipped the ad! Spin cancelled.', Colors.orange);
+      }
+    );
   }
 
   void _showSnackBar(String msg, Color color) {
@@ -122,7 +192,11 @@ class _SpinScreenState extends State<SpinScreen> {
     }
     if (_timerNotifier.value > 0 || _isSpinning) return; 
     
-    _startSpin();
+    if (_adsEnabled && !_isAdWatched) {
+      _showUnityVideoAd();
+    } else {
+      _startSpin();
+    }
   }
 
   void _startSpin() {
@@ -254,8 +328,25 @@ class _SpinScreenState extends State<SpinScreen> {
                 builder: (context, timerValue, child) {
                   bool isLimitReached = _spinsToday >= _dailyLimit;
                   
-                  return ElevatedButton(
+                  String buttonText;
+                  if (isLimitReached) {
+                    buttonText = "COME BACK TOMORROW";
+                  } else if (timerValue > 0) {
+                    buttonText = "Wait ${timerValue}s";
+                  } else if (_adsEnabled && !_isAdWatched) {
+                    buttonText = "WATCH AD TO SPIN";
+                  } else {
+                    buttonText = "SPIN NOW";
+                  }
+
+                  return ElevatedButton.icon(
                     onPressed: (_isSpinning || timerValue > 0 || isLimitReached) ? null : _handleSpinClick,
+                    icon: Icon(
+                      (_adsEnabled && !_isAdWatched && timerValue == 0 && !isLimitReached) 
+                          ? Icons.play_circle_fill 
+                          : Icons.casino,
+                      color: Colors.white,
+                    ),
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 60),
                       backgroundColor: isLimitReached ? Colors.red.shade400 : const Color(0xFF6750A4),
@@ -263,12 +354,8 @@ class _SpinScreenState extends State<SpinScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                       elevation: (timerValue > 0 || isLimitReached) ? 0 : 5, 
                     ),
-                    child: Text(
-                      isLimitReached 
-                          ? "COME BACK TOMORROW" 
-                          : timerValue > 0 
-                              ? "Wait ${timerValue}s" 
-                              : "SPIN NOW",
+                    label: Text(
+                      buttonText,
                       style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1),
                     ),
                   );
@@ -283,6 +370,9 @@ class _SpinScreenState extends State<SpinScreen> {
               builder: (context, timerValue, child) {
                 if (_spinsToday >= _dailyLimit) {
                   return const Text("🚫 Daily limit reached!", style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600));
+                }
+                if (_adsEnabled && !_isAdWatched && timerValue == 0) {
+                  return const Text("📺 Watch a short video to spin!", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold));
                 }
                 return Text(
                   timerValue > 0 ? "⏳ Take a breath! Next spin soon." : "✨ Ready to win big?",
