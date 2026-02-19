@@ -19,6 +19,16 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    // 🔥 NAYA BLOCK: Ye GitHub ko batayega ki konsi key use karni hai
+    signingConfigs {
+        create("release") {
+            storeFile = file("upload-keystore.jks")
+            storePassword = "password"
+            keyAlias = "upload"
+            keyPassword = "password"
+        }
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.hypernest.adrewardspro"
@@ -32,9 +42,8 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // 🔥 NAYA BLOCK: Debug hata kar "release" set kar diya
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
