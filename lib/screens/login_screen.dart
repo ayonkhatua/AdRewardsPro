@@ -1,7 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'home_screen.dart';
 
@@ -21,17 +20,30 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoginMode = true;
   
   final supabase = Supabase.instance.client;
+  late final StreamSubscription<AuthState> _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // 👇 Listener: Jaise hi browser se login complete hoga, ye Home Screen bhej dega
+    _authSubscription = supabase.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.signedIn) {
+        _navigateToHome();
+      }
+    });
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _referralController.dispose();
+    _authSubscription.cancel(); // Listener band karna zaroori hai
     super.dispose();
   }
 
   // ==========================================
-  // EMAIL AUTH LOGIC (UNCHANGED)
+  // EMAIL AUTH LOGIC
   // ==========================================
   Future<void> _handleAuth() async {
     final email = _emailController.text.trim();
@@ -39,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final referralCode = _referralController.text.trim();
 
     if (email.isEmpty || password.length < 6) {
-      _showSnackBar('Please enter a valid email and password (min 6 chars)', Colors.orange);
+      _showSnackBar('Invalid email or password', Colors.orange);
       return;
     }
 
@@ -48,7 +60,6 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       if (_isLoginMode) {
         await supabase.auth.signInWithPassword(email: email, password: password);
-        _navigateToHome();
       } else {
         final AuthResponse res = await supabase.auth.signUp(email: email, password: password);
         
@@ -56,21 +67,18 @@ class _LoginScreenState extends State<LoginScreen> {
           if (referralCode.isNotEmpty) {
              await _processReferralCode(res.user!.id, referralCode);
           }
-          
           _showSnackBar('Account created! Please Login.', Colors.green);
           setState(() {
             _isLoginMode = true;
             _referralController.clear();
             _passwordController.clear();
           });
-        } else {
-           _showSnackBar('Signup failed. Please try again.', Colors.red);
         }
       }
     } on AuthException catch (e) {
       _showSnackBar(e.message, Colors.red);
     } catch (e) {
-      _showSnackBar('An unexpected error occurred.', Colors.red);
+      _showSnackBar('Error: $e', Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -78,90 +86,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _processReferralCode(String newUserId, String enteredCode) async {
     try {
-      final response = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('referral_code', enteredCode)
-          .maybeSingle(); 
-
+      final response = await supabase.from('profiles').select('id').eq('referral_code', enteredCode).maybeSingle(); 
       if (response != null && response['id'] != null) {
-        await supabase.from('profiles').update({
-          'referred_by': response['id']
-        }).eq('id', newUserId);
-      } else {
-        print("Invalid Referral Code.");
+        await supabase.from('profiles').update({'referred_by': response['id']}).eq('id', newUserId);
       }
-    } catch (e) {
-      print("Referral Logic Error: $e");
-    }
+    } catch (_) {}
   }
 
   // ==========================================
-  // GOOGLE SIGN-IN LOGIC (FIXED)
+  // GOOGLE SIGN-IN LOGIC (WEB OAUTH)
   // ==========================================
   Future<void> _googleSignIn() async {
     setState(() => _isLoading = true);
-    
     try {
-      // Pehle se existing session clear karo
-      await GoogleSignIn().signOut();
-
-      // Web Client ID (Google Cloud Console se)
-      const webClientId = '567470905268-sh82ku8hkh0t50gl6pf4ob4p90d6kc0d.apps.googleusercontent.com';
-
-      // ✅ FIX: 'clientId' line hata di gayi hai. Android khud SHA-1 se verify karega.
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        serverClientId: webClientId,
-        scopes: ['email', 'profile', 'openid'],
+      // Direct browser open karega
+      await supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'com.hypernest.adrewardspro://login-callback',
       );
-
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      
-      if (googleUser == null) {
-        setState(() => _isLoading = false);
-        _showSnackBar('Sign in cancelled by user', Colors.orange);
-        return; 
-      }
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      
-      final String? idToken = googleAuth.idToken;
-      final String? accessToken = googleAuth.accessToken;
-
-      print('✅ Google Auth Success');
-      print('ID Token exists: ${idToken != null}');
-      print('Access Token exists: ${accessToken != null}');
-
-      if (idToken == null || idToken.isEmpty) {
-        throw Exception('Google ID Token is null. Check your Web Client ID in Google Cloud Console.');
-      }
-
-      // Supabase mein sign in
-      final AuthResponse response = await supabase.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
-      );
-
-      if (response.user != null) {
-        print('✅ Supabase Auth Success: ${response.user!.email}');
-        _navigateToHome();
-      } else {
-        throw Exception('Supabase returned null user');
-      }
-
-    } on PlatformException catch (e) {
-      String errorMsg = 'Google Sign-In Error: ${e.message}';
-      if (e.code == 'sign_in_failed') {
-        errorMsg = 'Sign in failed. Check:\n1. SHA-1 fingerprint in Google Cloud\n2. OAuth Consent Screen is Published';
-      } else if (e.code == 'network_error') {
-        errorMsg = 'Network error. Check your internet connection.';
-      }
-      _showSnackBar(errorMsg, Colors.red);
     } on AuthException catch (e) {
-      _showSnackBar('Auth Error: ${e.message}', Colors.red);
+      _showSnackBar(e.message, Colors.red);
     } catch (e) {
-      _showSnackBar('Login Failed: $e', Colors.red);
+      _showSnackBar('Error: $e', Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -169,28 +115,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _navigateToHome() {
     if (mounted) {
-      Navigator.pushReplacement(
-        context, 
-        MaterialPageRoute(builder: (context) => const HomeScreen())
-      );
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
     }
   }
 
   void _showSnackBar(String message, Color color) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message), 
-          backgroundColor: color, 
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-        ),
+        SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
       );
     }
   }
 
   // ==========================================
-  // UI BUILD (UNCHANGED)
+  // UI BUILD
   // ==========================================
   @override
   Widget build(BuildContext context) {
@@ -213,20 +151,13 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2), 
-                    shape: BoxShape.circle
-                  ),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
                   child: const Icon(Icons.monetization_on_rounded, size: 60, color: Colors.white),
                 ),
                 const SizedBox(height: 20),
                 Text(
                   _isLoginMode ? 'Welcome Back!' : 'Create Account',
-                  style: GoogleFonts.poppins(
-                    fontSize: 26, 
-                    fontWeight: FontWeight.bold, 
-                    color: Colors.white
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 30),
 
@@ -235,13 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2), 
-                        blurRadius: 20, 
-                        offset: const Offset(0, 5)
-                      )
-                    ],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 5))],
                   ),
                   child: Column(
                     children: [
@@ -250,12 +175,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         decoration: InputDecoration(
                           labelText: 'Email Address',
                           prefixIcon: Icon(Icons.email_outlined, color: Colors.purple.shade300),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12), 
-                            borderSide: BorderSide.none
-                          ),
-                          filled: true, 
-                          fillColor: Colors.grey.shade100,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          filled: true, fillColor: Colors.grey.shade100,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -265,12 +186,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         decoration: InputDecoration(
                           labelText: 'Password',
                           prefixIcon: Icon(Icons.lock_outline, color: Colors.purple.shade300),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12), 
-                            borderSide: BorderSide.none
-                          ),
-                          filled: true, 
-                          fillColor: Colors.grey.shade100,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          filled: true, fillColor: Colors.grey.shade100,
                         ),
                       ),
                       if (!_isLoginMode) ...[
@@ -280,12 +197,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: 'Referral Code (Optional)',
                             prefixIcon: Icon(Icons.group_add_outlined, color: Colors.purple.shade300),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12), 
-                              borderSide: BorderSide.none
-                            ),
-                            filled: true, 
-                            fillColor: Colors.grey.shade100,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            filled: true, fillColor: Colors.grey.shade100,
                           ),
                         ),
                       ],
@@ -297,35 +210,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: _isLoading ? null : _handleAuth,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6A11CB),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)
-                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           child: _isLoading
-                              ? const SizedBox(
-                                  height: 24, 
-                                  width: 24, 
-                                  child: CircularProgressIndicator(color: Colors.white)
-                                )
-                              : Text(
-                                  _isLoginMode ? 'LOGIN' : 'SIGN UP', 
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16, 
-                                    fontWeight: FontWeight.bold, 
-                                    color: Colors.white
-                                  )
-                                ),
+                              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white))
+                              : Text(_isLoginMode ? 'LOGIN' : 'SIGN UP', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                         ),
                       ),
                       const SizedBox(height: 10),
                       TextButton(
                         onPressed: () => setState(() => _isLoginMode = !_isLoginMode),
-                        child: Text(
-                          _isLoginMode 
-                            ? "Don't have an account? Sign Up" 
-                            : "Already have an account? Login", 
-                          style: const TextStyle(fontWeight: FontWeight.bold)
-                        ),
+                        child: Text(_isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Login", style: const TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -340,18 +235,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white, 
                       foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: const Icon(Icons.g_mobiledata, size: 40, color: Colors.red), 
-                    label: Text(
-                      'Sign in with Google', 
-                      style: GoogleFonts.poppins(
-                        fontSize: 16, 
-                        fontWeight: FontWeight.w600
-                      )
-                    ),
+                    label: Text('Sign in with Google', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
