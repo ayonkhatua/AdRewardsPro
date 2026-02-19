@@ -103,21 +103,18 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     
     try {
-      // 🔥 FIX 1: Pehle se existing session clear karo
+      // Pehle se existing session clear karo
       await GoogleSignIn().signOut();
 
-      // 🔥 FIX 2: Web Client ID - Yeh Google Cloud Console se lo (Web Application type)
-      // IMPORTANT: Yeh sirf WEB CLIENT ID honi chahiye, Android nahi!
+      // Web Client ID (Google Cloud Console se)
       const webClientId = '567470905268-sh82ku8hkh0t50gl6pf4ob4p90d6kc0d.apps.googleusercontent.com';
 
-      // 🔥 FIX 3: GoogleSignIn configure karo with scopes
+      // ✅ FIX: 'clientId' line hata di gayi hai. Android khud SHA-1 se verify karega.
       final GoogleSignIn googleSignIn = GoogleSignIn(
-        clientId: webClientId,  // 👈 Yeh add karo
         serverClientId: webClientId,
-        scopes: ['email', 'profile', 'openid'],  // 👈 Scopes add karo
+        scopes: ['email', 'profile', 'openid'],
       );
 
-      // 🔥 FIX 4: Sign in with better error handling
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       
       if (googleUser == null) {
@@ -126,23 +123,20 @@ class _LoginScreenState extends State<LoginScreen> {
         return; 
       }
 
-      // 🔥 FIX 5: Authentication fetch karo with timeout
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       
       final String? idToken = googleAuth.idToken;
       final String? accessToken = googleAuth.accessToken;
 
-      // Debug prints
       print('✅ Google Auth Success');
       print('ID Token exists: ${idToken != null}');
       print('Access Token exists: ${accessToken != null}');
 
-      // 🔥 FIX 6: Strong null check
       if (idToken == null || idToken.isEmpty) {
-        throw Exception('Google ID Token is null or empty. Check your OAuth 2.0 Web Client ID configuration in Google Cloud Console.');
+        throw Exception('Google ID Token is null. Check your Web Client ID in Google Cloud Console.');
       }
 
-      // 🔥 FIX 7: Supabase mein sign in with proper provider
+      // Supabase mein sign in
       final AuthResponse response = await supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
@@ -159,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on PlatformException catch (e) {
       String errorMsg = 'Google Sign-In Error: ${e.message}';
       if (e.code == 'sign_in_failed') {
-        errorMsg = 'Sign in failed. Check:\n1. SHA-1 fingerprint in Firebase/Google Cloud\n2. OAuth Consent Screen configured\n3. Web Client ID is correct';
+        errorMsg = 'Sign in failed. Check:\n1. SHA-1 fingerprint in Google Cloud\n2. OAuth Consent Screen is Published';
       } else if (e.code == 'network_error') {
         errorMsg = 'Network error. Check your internet connection.';
       }
