@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; 
 import 'package:unity_ads_plugin/unity_ads_plugin.dart'; 
 
-// 👇 NAYA: Apna model import kiya
 import '../models/app_settings_model.dart';
 
 class SpinScreen extends StatefulWidget {
@@ -22,13 +21,11 @@ class _SpinScreenState extends State<SpinScreen> {
   bool _isSpinning = false;
   Timer? _cooldownTimer;
   
-  // Backend Limits & Data
   final int _dailyLimit = 5; 
   int _spinsToday = 0;
   bool _isLoadingData = true;
   int _winningIndex = 0; 
 
-  // Admin control ke variables
   bool _adsEnabled = true;
   bool _isAdWatched = false;
   
@@ -47,44 +44,32 @@ class _SpinScreenState extends State<SpinScreen> {
 
   Future<void> _initData() async {
     await _fetchSpinData();
-    await _fetchAdminSettings(); // 👈 Update kiya hua function
+    await _fetchAdminSettings(); 
     await _generateOrLoadSpinIndex(); 
     await _checkSavedTimer();
     setState(() => _isLoadingData = false);
   }
 
-  // ==========================================
-  // 👇 UPDATE: MODEL KA USE KARKE SETTINGS LAANA
-  // ==========================================
   Future<void> _fetchAdminSettings() async {
     try {
-      // Data laya gaya
       final response = await Supabase.instance.client
           .from('app_settings')
           .select()
           .single();
 
-      // Model mein convert kiya
       final settings = AppSettingsModel.fromJson(response);
 
       if (mounted) {
         setState(() {
-          // Model se safely value nikali
           _adsEnabled = settings.adsEnabled;
-          
-          // Agar ads band hain, toh maan lo ad dekh liya taaki spin ho sake
           if (!_adsEnabled) {
             _isAdWatched = true; 
           }
         });
       }
     } catch (e) {
-      debugPrint("Error fetching admin settings. Error: $e");
-      if (mounted) {
-        setState(() {
-          _isAdWatched = true; // DB Error aaye toh user block na ho
-        });
-      }
+      debugPrint("Error fetching admin settings: $e");
+      if (mounted) setState(() => _isAdWatched = true);
     }
   }
 
@@ -145,7 +130,6 @@ class _SpinScreenState extends State<SpinScreen> {
 
         setState(() {
            _spinsToday++;
-           // Agle spin ke liye ad fir se dekhna padega (agar ads on hain)
            if (_adsEnabled) _isAdWatched = false; 
         }); 
         _startCooldown(); 
@@ -155,26 +139,67 @@ class _SpinScreenState extends State<SpinScreen> {
     }
   }
 
+  // ==========================================
+  // 👇 UPDATED: Load then Show Logic with Error Dialog
+  // ==========================================
   void _showUnityVideoAd() {
     _showSnackBar("Loading Ad...", Colors.blue);
     
-    UnityAds.showVideoAd(
-      placementId: 'Rewarded_Android', 
-      onStart: (placementId) => debugPrint('Ad Started'),
+    // 1. Pehle Ad server se Load karni hogi
+    UnityAds.load(
+      placementId: 'Rewarded_Android',
       onComplete: (placementId) {
-        debugPrint('✅ Ad watched fully. Auto-Spinning now!');
-        setState(() {
-          _isAdWatched = true; 
-        });
-        _startSpin();
+        // 2. Load hone ke baad hi Show hogi
+        UnityAds.showVideoAd(
+          placementId: placementId,
+          onStart: (placementId) => debugPrint('Ad Started'),
+          onComplete: (placementId) {
+            debugPrint('✅ Ad watched fully. Auto-Spinning now!');
+            setState(() {
+              _isAdWatched = true; 
+            });
+            _startSpin(); // Ad ke baad khud spin ho jayega
+          },
+          onFailed: (placementId, error, message) {
+            debugPrint('❌ Ad Failed to Show: $message');
+            _showAdErrorDialog("Playback Error", "Could not play the video. Please try again.");
+          },
+          onSkipped: (placementId) {
+             _showSnackBar('You skipped the ad! Spin cancelled.', Colors.orange);
+          }
+        );
       },
       onFailed: (placementId, error, message) {
-        debugPrint('❌ Ad Failed: $message');
-        _showSnackBar('Failed to load ad. Please try again later.', Colors.red);
+        debugPrint('❌ Ad Load Failed: $error - $message');
+        _showAdErrorDialog(
+          "Ad Not Available", 
+          "We couldn't load an ad. If you use an AdBlocker, Private DNS, or VPN, please turn it off to continue earning."
+        );
       },
-      onSkipped: (placementId) {
-         _showSnackBar('You skipped the ad! Spin cancelled.', Colors.orange);
-      }
+    );
+  }
+
+  void _showAdErrorDialog(String title, String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            const SizedBox(width: 10),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK", style: TextStyle(color: Color(0xFF6750A4), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -187,7 +212,7 @@ class _SpinScreenState extends State<SpinScreen> {
 
   void _handleSpinClick() {
     if (_spinsToday >= _dailyLimit) {
-      _showSnackBar('You have used all $_dailyLimit spins for today!', Colors.red);
+      _showSnackBar('Daily limit reached!', Colors.red);
       return;
     }
     if (_timerNotifier.value > 0 || _isSpinning) return; 
@@ -375,7 +400,7 @@ class _SpinScreenState extends State<SpinScreen> {
                   return const Text("📺 Watch a short video to spin!", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold));
                 }
                 return Text(
-                  timerValue > 0 ? "⏳ Take a breath! Next spin soon." : "✨ Ready to win big?",
+                  timerValue > 0 ? "⏳ Next spin soon." : "✨ Ready to win big?",
                   style: TextStyle(
                     color: timerValue > 0 ? Colors.grey.shade600 : const Color(0xFF6750A4), 
                     fontWeight: FontWeight.w600,

@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; 
 import 'package:unity_ads_plugin/unity_ads_plugin.dart'; 
 
-// 👇 NAYA: Apna model import kiya
 import '../models/app_settings_model.dart';
 
 class ScratchScreen extends StatefulWidget {
@@ -28,7 +27,6 @@ class _ScratchScreenState extends State<ScratchScreen> {
   int _currentReward = 0;
   bool _isRevealed = false;
 
-  // Admin control ke liye variables
   int _minReward = 1;
   int _maxReward = 15;
   bool _adsEnabled = true; 
@@ -42,7 +40,7 @@ class _ScratchScreenState extends State<ScratchScreen> {
 
   Future<void> _initData() async {
     await _fetchScratchData();
-    await _fetchAdminSettings(); // 👈 Update kiya hua function call hoga
+    await _fetchAdminSettings(); 
     await _generateOrLoadReward();
     await _checkSavedTimer();
     setState(() => _isLoadingData = false);
@@ -72,23 +70,17 @@ class _ScratchScreenState extends State<ScratchScreen> {
     }
   }
 
-  // ==========================================
-  // 👇 1. UPDATE: MODEL KA USE KARKE SETTINGS LAANA
-  // ==========================================
   Future<void> _fetchAdminSettings() async {
     try {
-      // Data laya gaya
       final response = await Supabase.instance.client
           .from('app_settings')
           .select()
           .single();
 
-      // Model mein convert kiya
       final settings = AppSettingsModel.fromJson(response);
 
       if (mounted) {
         setState(() {
-          // Model se safely values assign ki
           _minReward = settings.minScratchReward;
           _maxReward = settings.maxScratchReward;
           _adsEnabled = settings.adsEnabled;
@@ -102,7 +94,7 @@ class _ScratchScreenState extends State<ScratchScreen> {
       debugPrint("Error fetching admin settings. Error: $e");
       if (mounted) {
         setState(() {
-          _isAdWatched = true; // Error hone par block na ho
+          _isAdWatched = true; 
         });
       }
     }
@@ -155,25 +147,72 @@ class _ScratchScreenState extends State<ScratchScreen> {
     }
   }
 
+  // ==========================================
+  // 👇 UPDATE: Smart Ad Loading & Error Handling
+  // ==========================================
   void _showUnityVideoAd() {
     _showSnackBar("Loading Ad...", Colors.blue);
     
-    UnityAds.showVideoAd(
-      placementId: 'Rewarded_Android', 
-      onStart: (placementId) => debugPrint('Ad Started'),
+    // 1. Pehle Ad Load karenge
+    UnityAds.load(
+      placementId: 'Rewarded_Android',
       onComplete: (placementId) {
-        debugPrint('✅ Ad watched fully. Unlock Scratch Card!');
-        setState(() {
-          _isAdWatched = true; 
-        });
+        // 2. Load successful hone par Show karenge
+        UnityAds.showVideoAd(
+          placementId: placementId,
+          onStart: (placementId) => debugPrint('Ad Started'),
+          onComplete: (placementId) {
+            debugPrint('✅ Ad watched fully. Unlock Scratch Card!');
+            setState(() {
+              _isAdWatched = true; 
+            });
+          },
+          onFailed: (placementId, error, message) {
+            debugPrint('❌ Ad Show Failed: $message');
+            _showAdErrorDialog(
+              "Playback Error", 
+              "There was an error playing the video. Please try again."
+            );
+          },
+          onSkipped: (placementId) {
+             _showSnackBar('You skipped the ad! Reward not unlocked.', Colors.orange);
+          }
+        );
       },
       onFailed: (placementId, error, message) {
-        debugPrint('❌ Ad Failed: $message');
-        _showSnackBar('Failed to load ad. Please try again later.', Colors.red);
+        debugPrint('❌ Ad Load Failed: $error - $message');
+        
+        // Agar Load fail hua toh jyadatar reason Adblocker ya slow internet hota hai
+        _showAdErrorDialog(
+          "Ad Load Failed", 
+          "We couldn't load an ad at this moment.\n\n⚠️ Important: If you are using an AdBlocker, Private DNS (like AdGuard), or a VPN, please disable it to earn rewards. Otherwise, check your internet connection."
+        );
       },
-      onSkipped: (placementId) {
-         _showSnackBar('You skipped the ad! Reward not unlocked.', Colors.orange);
-      }
+    );
+  }
+
+  // 👇 NAYA: Custom Alert Box for better UX
+  void _showAdErrorDialog(String title, String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK, I Understand', style: TextStyle(color: Color(0xFF6750A4), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 

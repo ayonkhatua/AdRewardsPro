@@ -45,6 +45,6 @@ app.*.map.json
 /android/app/release
 
 # NAYA CODE: Environment Variables ko GitHub par jane se rokne ke liye
-*.env
-.env
-.env*
+# *.env
+# .env
+# .env*
