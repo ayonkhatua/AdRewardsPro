@@ -10,10 +10,12 @@ class ManageUsersPage extends StatefulWidget {
 
 class _ManageUsersPageState extends State<ManageUsersPage> {
   final _supabase = Supabase.instance.client;
+  
+  // 👇 NAYA: Search query track karne ke liye variable
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
-  // 👇 Block/Unblock toggle karne ka function
   Future<void> _toggleBlockStatus(String userId, bool currentStatus) async {
-    // Confirmation dialog dikhayenge pehle
     bool confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -35,7 +37,6 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     if (!confirm) return;
 
     try {
-      // Supabase mein update kar rahe hain
       await _supabase.from('profiles').update({
         'is_blocked': !currentStatus,
       }).eq('id', userId);
@@ -59,15 +60,59 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         const Padding(
-          padding: EdgeInsets.all(16.0),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text('All Users Database', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         ),
+        
+        // 👇 NAYA: Real-time Search Bar
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value.toLowerCase(); // Search query update hogi
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Search by Email or User ID...',
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF6A11CB)),
+              suffixIcon: _searchQuery.isNotEmpty 
+                ? IconButton(
+                    icon: const Icon(Icons.clear, color: Colors.grey),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _searchQuery = '';
+                      });
+                    },
+                  ) 
+                : null,
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF6A11CB), width: 2),
+              ),
+            ),
+          ),
+        ),
+
         Expanded(
-          // 👇 NAYA: FutureBuilder ki jagah StreamBuilder lagaya taaki Live (Real-time) update ho
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: _supabase.from('profiles').stream(primaryKey: ['id']),
             builder: (context, snapshot) {
@@ -78,19 +123,36 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                 return const Center(child: Text('No users found.'));
               }
 
-              // Data ko sort kar rahe hain (Highest balance upar)
-              final users = List<Map<String, dynamic>>.from(snapshot.data!);
+              // Sabhi users ko le aaye
+              List<Map<String, dynamic>> users = List<Map<String, dynamic>>.from(snapshot.data!);
+
+              // 👇 NAYA: Search filter logic (Email ya ID se match karega)
+              if (_searchQuery.isNotEmpty) {
+                users = users.where((user) {
+                  final email = (user['email'] ?? '').toString().toLowerCase();
+                  final id = (user['id'] ?? '').toString().toLowerCase();
+                  return email.contains(_searchQuery) || id.contains(_searchQuery);
+                }).toList();
+              }
+
+              // Filter hone ke baad sort kar rahe hain (Highest balance upar)
               users.sort((a, b) => (b['wallet_balance'] ?? 0).compareTo(a['wallet_balance'] ?? 0));
+
+              if (users.isEmpty) {
+                return const Center(child: Text('No users match your search.', style: TextStyle(color: Colors.grey)));
+              }
 
               return ListView.builder(
                 itemCount: users.length,
                 itemBuilder: (context, index) {
                   final user = users[index];
-                  final bool isBlocked = user['is_blocked'] ?? false; // Check block status
+                  final bool isBlocked = user['is_blocked'] ?? false; 
+                  // 👇 Email show karne ke liye
+                  final String userEmail = user['email'] ?? 'No Email Provided';
 
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    color: isBlocked ? Colors.red.shade50 : Colors.white, // Blocked user ka card laal ho jayega
+                    color: isBlocked ? Colors.red.shade50 : Colors.white, 
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                       side: BorderSide(color: isBlocked ? Colors.red.shade300 : Colors.transparent),
@@ -99,13 +161,20 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                       leading: CircleAvatar(
                         backgroundColor: isBlocked ? Colors.red.shade100 : const Color(0xFFEADDFF),
                         child: Text(
-                          user['referral_code']?.substring(0, 1) ?? 'U',
+                          userEmail != 'No Email Provided' ? userEmail.substring(0, 1).toUpperCase() : 'U',
                           style: TextStyle(color: isBlocked ? Colors.red : const Color(0xFF6A11CB), fontWeight: FontWeight.bold),
                         ),
                       ),
                       title: Row(
                         children: [
-                          Text('Ref: ${user['referral_code'] ?? 'N/A'}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          // 👇 NAYA: Referral Code ki jagah Email aa gaya
+                          Expanded(
+                            child: Text(
+                              userEmail, 
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis, // Bada email ho toh cut ho jaye
+                            ),
+                          ),
                           if (isBlocked) ...[
                             const SizedBox(width: 8),
                             const Icon(Icons.block, color: Colors.red, size: 16),
@@ -133,7 +202,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                           ),
                           const SizedBox(width: 8),
                           
-                          // 👇 Block/Unblock Button
+                          // Block/Unblock Button
                           IconButton(
                             icon: Icon(
                               isBlocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
