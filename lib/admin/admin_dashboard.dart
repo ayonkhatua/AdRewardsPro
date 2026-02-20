@@ -11,7 +11,8 @@ import 'pages/ads_control_page.dart';
 import 'pages/rewards_control_page.dart';
 import 'pages/manage_users_page.dart';
 import 'pages/system_control_page.dart'; 
-import 'pages/admin_withdrawals_page.dart'; // 👇 NAYA: Withdrawal Page Import Kiya
+import 'pages/admin_withdrawals_page.dart'; 
+import 'pages/admin_support_page.dart'; // 👇 NAYA: Support Page Import Kiya
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -27,17 +28,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   final _supabase = Supabase.instance.client;
 
-  // 👇 NAYA: Title list mein Withdrawal Requests add kiya
+  // 👇 NAYA: Title list mein Support Inbox add kiya
   final List<String> _titles = [
     'Dashboard Overview',
     'Ads Settings',
     'Rewards Control',
     'Manage Users',
     'System Control',
-    'Withdrawal Requests' 
+    'Withdrawal Requests',
+    'Support Inbox' 
   ];
 
-  // 👇 NAYA: Pages list mein AdminWithdrawalsPage() add kiya
+  // 👇 NAYA: Pages list mein AdminSupportPage() add kiya
   final List<Widget> _pages = const [
     OverviewPage(),
     AdsControlPage(),
@@ -45,6 +47,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     ManageUsersPage(),
     SystemControlPage(), 
     AdminWithdrawalsPage(), 
+    AdminSupportPage(),
   ];
 
   @override
@@ -139,9 +142,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             _buildDrawerItem(icon: Icons.card_giftcard, title: 'Rewards Control', index: 2),
             _buildDrawerItem(icon: Icons.people, title: 'Manage Users', index: 3),
             _buildDrawerItem(icon: Icons.settings_system_daydream, title: 'System Control', index: 4), 
-            
-            // 👇 NAYA: Withdrawal Requests ka Drawer Button add kiya
             _buildDrawerItem(icon: Icons.payment, title: 'Withdrawal Requests', index: 5), 
+            
+            // 👇 NAYA: Support Inbox ka Drawer Button add kiya
+            _buildDrawerItem(icon: Icons.support_agent_rounded, title: 'Support Inbox', index: 6),
             
             const Divider(),
             ListTile(

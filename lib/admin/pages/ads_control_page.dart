@@ -151,7 +151,7 @@ class _AdsControlPageState extends State<AdsControlPage> {
               title: const Text('Enable Test Mode', style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: const Text('Keep ON while testing to avoid account ban. Turn OFF for real ads.'),
               value: _isTestMode,
-              activeColor: Colors.white,
+              activeThumbColor: Colors.white,
               activeTrackColor: Colors.orange, 
               onChanged: (bool value) {
                 setState(() {
@@ -172,7 +172,7 @@ class _AdsControlPageState extends State<AdsControlPage> {
               title: const Text('Enable Ads in App', style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: const Text('Turn off to disable all video ads temporarily'),
               value: _adsEnabled,
-              activeColor: Colors.white,
+              activeThumbColor: Colors.white,
               activeTrackColor: const Color(0xFF6A11CB),
               onChanged: (bool value) {
                 setState(() {

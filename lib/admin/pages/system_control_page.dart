@@ -119,7 +119,7 @@ class _SystemControlPageState extends State<SystemControlPage> {
               title: const Text('Maintenance Mode', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
               subtitle: const Text('Turn ON to block users from accessing the app during updates.'),
               value: _isMaintenance,
-              activeColor: Colors.white,
+              activeThumbColor: Colors.white,
               activeTrackColor: Colors.red,
               onChanged: (bool value) {
                 setState(() {

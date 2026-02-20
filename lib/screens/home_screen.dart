@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:adrewards_pro/admin/admin_login_check.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart'; 
@@ -8,7 +7,7 @@ import 'package:dart_ipify/dart_ipify.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 import 'package:unity_ads_plugin/unity_ads_plugin.dart'; 
 
-// 👇 Apne models aur screens import karein
+import '../admin/admin_dashboard.dart'; // 👇 Admin Dashboard Import fix kiya
 import '../models/app_settings_model.dart';
 
 import 'spin_screen.dart';
@@ -17,8 +16,9 @@ import 'refer_screen.dart';
 import 'withdrawal_screen.dart';
 import 'login_screen.dart'; 
 import 'transaction_screen.dart';
+import 'support_screen.dart'; // 👇 NAYA: Support Screen ko import kiya
 
-// 👇 CURRENT APP VERSION - Play Store par update karte waqt ise badhana (e.g., 2, 3...)
+// CURRENT APP VERSION - Play Store par update karte waqt ise badhana (e.g., 2, 3...)
 const int CURRENT_APP_VERSION = 1;
 
 class HomeScreen extends StatefulWidget {
@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _runStartupChecks(); // App khulte hi guard checking shuru
+    _runStartupChecks(); 
   }
 
   // ==========================================
@@ -69,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user == null) return;
 
     try {
-      // 1. Fetch App Settings (Admin Panel Data)
+      // 1. Fetch App Settings 
       final response = await supabase.from('app_settings').select().single();
       final settings = AppSettingsModel.fromJson(response);
 
@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _isMaintenance = true;
           _isLoading = false;
         });
-        return; // Maintenance hai toh aage ka logic run mat karo
+        return; 
       }
 
       // 3. Check App Update
@@ -99,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final profileData = await supabase.from('profiles').select('is_blocked').eq('id', user.id).single();
       if (profileData['is_blocked'] == true) {
         _blockUser("Your account has been permanently blocked by the Administrator for violating app policies.");
-        return; // Aage mat badho, user block hai
+        return; 
       }
 
       // 5. IP & Device ID Fraud Check
@@ -118,7 +118,6 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final supabase = Supabase.instance.client;
       
-      // Get Device ID
       final deviceInfo = DeviceInfoPlugin();
       String deviceId = 'unknown_device';
       if (Platform.isAndroid) {
@@ -129,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> {
         deviceId = iosInfo.identifierForVendor ?? 'unknown_ios';
       }
 
-      // Get IP Address (try-catch taaki network error app crash na kare)
       String currentIp = 'unknown_ip';
       try {
         currentIp = await Ipify.ipv4();
@@ -137,7 +135,6 @@ class _HomeScreenState extends State<HomeScreen> {
         debugPrint("IP fetch failed: $e");
       }
 
-      // Check for Dual App / Same Device ID
       final deviceCheck = await supabase.from('profiles')
           .select('id')
           .eq('device_id', deviceId)
@@ -148,7 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Check for Same Wi-Fi / IP Address
       if (currentIp != 'unknown_ip') {
         final ipCheck = await supabase.from('profiles')
             .select('id')
@@ -161,7 +157,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      // Safe: Update current ID & IP in database
       await supabase.from('profiles').update({
         'device_id': deviceId,
         'last_ip': currentIp,
@@ -190,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       barrierDismissible: false, 
       builder: (context) => PopScope(
-        canPop: false, // Back button disable karta hai
+        canPop: false, 
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Update Required!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
@@ -225,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _tabTapCount++;
     if (_tabTapCount >= _interAdInterval) {
-      _tabTapCount = 0; // Reset counter
+      _tabTapCount = 0; 
       _showInterstitialAd();
     }
   }
@@ -245,7 +240,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Loading Screen
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Colors.white,
@@ -262,21 +256,20 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // 2. Maintenance Screen
     if (_isMaintenance) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: Colors.white,
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(30.0),
+            padding: EdgeInsets.all(30.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.engineering_rounded, size: 80, color: Colors.orange),
-                const SizedBox(height: 20),
-                const Text("Under Maintenance", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                const Text("We are upgrading our servers. Please check back later.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                Icon(Icons.engineering_rounded, size: 80, color: Colors.orange),
+                SizedBox(height: 20),
+                Text("Under Maintenance", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                SizedBox(height: 10),
+                Text("We are upgrading our servers. Please check back later.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               ],
             ),
           ),
@@ -284,7 +277,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // 3. Blocked Screen (Fraud Detection)
     if (_isBlocked) {
       return Scaffold(
         backgroundColor: Colors.red.shade50,
@@ -306,14 +298,12 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // 4. Main App Screen with Banner Ad
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FD), 
       body: SafeArea(child: _tabs[_currentIndex]),
       bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min, // Jaroori hai warna poori screen gher lega
+        mainAxisSize: MainAxisSize.min, 
         children: [
-          // Banner Ad Container
           if (_adsEnabled)
             Container(
               color: Colors.white,
@@ -325,13 +315,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 onFailed: (placementId, error, message) => debugPrint('Banner Failed: $message'),
               ),
             ),
-          // Navigation Bar
           NavigationBar(
             selectedIndex: _currentIndex,
             backgroundColor: Colors.white,
             elevation: 10,
             indicatorColor: const Color(0xFFEADDFF), 
-            onDestinationSelected: _handleTabSwitch, // Naya tab switch logic
+            onDestinationSelected: _handleTabSwitch, 
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.home_outlined),
@@ -357,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ==========================================
-// TAB 1: HOME TAB (With Secret Admin Check)
+// TAB 1: HOME TAB
 // ==========================================
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -381,14 +370,12 @@ class _HomeTabState extends State<HomeTab> {
           .eq('id', user.id)
           .map((data) => data.isNotEmpty ? data.first : {});
           
-      // Background me admin check call kiya
       _checkAdminStatus(user.email);
     } else {
       _userStream = Stream.value({}); 
     }
   }
 
-  // Supabase se admin email match karne ka logic
   Future<void> _checkAdminStatus(String? userEmail) async {
     if (userEmail == null) return;
     try {
@@ -431,13 +418,11 @@ class _HomeTabState extends State<HomeTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // HEADER
               Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Dashboard Title aur Admin Button ek sath
                     Row(
                       children: [
                         const Text(
@@ -450,8 +435,8 @@ class _HomeTabState extends State<HomeTab> {
                             icon: const Icon(Icons.admin_panel_settings, color: Colors.orange),
                             tooltip: 'Admin Panel',
                             onPressed: () {
-                              // 👇 NAYA: Ab ye safely AdminLoginChecker par jayega
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminLoginChecker()));
+                              // 👇 NAYA: AdminDashboard par jaayega sidha
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboard()));
                             },
                           ),
                         ],
@@ -479,7 +464,6 @@ class _HomeTabState extends State<HomeTab> {
                 ),
               ),
 
-              // BALANCE CARD
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 padding: const EdgeInsets.all(20),
@@ -509,7 +493,6 @@ class _HomeTabState extends State<HomeTab> {
 
               const SizedBox(height: 16),
 
-              // INVITE CARD
               GestureDetector(
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferScreen()));
@@ -695,7 +678,6 @@ class ProfileTab extends StatelessWidget {
               
               const SizedBox(height: 30),
 
-              // Coin Value Banner
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -750,6 +732,16 @@ class ProfileTab extends StatelessWidget {
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const TransactionScreen()));
+                },
+              ),
+              
+              // 👇 NAYA: Help & Support Button
+              ListTile(
+                leading: const Icon(Icons.support_agent_rounded, color: Color(0xFF6A11CB)),
+                title: const Text('Help & Support', style: TextStyle(fontWeight: FontWeight.bold)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SupportScreen()));
                 },
               ),
               
