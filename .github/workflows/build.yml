@@ -39,20 +39,29 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release --no-tree-shake-icons
 
-      # 6. SIGN APK (Ye naya action hai jo perfectly kaam karega)
+     # 6. SIGN APK (Native Commands - 100% Working & Fail-Proof)
       - name: Sign Release APK
-        uses: ilharp/sign-android-release@v1
-        id: sign_app
-        with:
-          releaseDir: build/app/outputs/flutter-apk
-          signingKey: ${{ secrets.KEYSTORE_BASE64 }}
-          keyAlias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # 1. Base64 se Keystore file wapas banayein
+          echo "$KEYSTORE_BASE64" | base64 --decode > my_keystore.jks
+          
+          # 2. Server par Android Build Tools ka latest version dhoondhein
+          BUILD_TOOLS_DIR=$(ls -1d $ANDROID_HOME/build-tools/* | tail -n 1)
+          
+          # 3. APK ko Zipalign karein (Optimize karne ke liye)
+          $BUILD_TOOLS_DIR/zipalign -v -p 4 build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/app-aligned.apk
+          
+          # 4. Keystore se APK ko Sign karein
+          $BUILD_TOOLS_DIR/apksigner sign --ks my_keystore.jks --ks-key-alias "$KEY_ALIAS" --ks-pass pass:"$KEYSTORE_PASSWORD" --key-pass pass:"$KEY_PASSWORD" --out build/app/outputs/flutter-apk/AdRewards-Pro-Signed.apk build/app/outputs/flutter-apk/app-aligned.apk
 
       # 7. Upload Signed APK
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
           name: AdRewards-Pro-Signed-APK
-          path: ${{ steps.sign_app.outputs.signedFile }}
+          path: build/app/outputs/flutter-apk/AdRewards-Pro-Signed.apk
