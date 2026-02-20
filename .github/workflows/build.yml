@@ -39,7 +39,7 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release --no-tree-shake-icons
 
-      # 6. SIGN APK (Keystore se digital sign karna)
+            # 6. SIGN APK (Keystore se digital sign karna)
       - name: Sign Release APK
         uses: r0adkll/sign-android-release@v1
         id: sign_app
@@ -50,7 +50,7 @@ jobs:
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-      # 7. Upload Signed APK (Jise aap download kar sakhoge)
+      # 7. Upload Signed APK
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
