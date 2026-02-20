@@ -12,18 +12,22 @@ class _AdminSupportPageState extends State<AdminSupportPage> {
   final _supabase = Supabase.instance.client;
   int? _processingId;
 
-  // Ticket ko Resolve (Close) karne ka function
-  Future<void> _resolveTicket(int id) async {
+  // 👇 NAYA: Ticket ka status update karne ka Master Function
+  Future<void> _updateTicketStatus(int id, String newStatus) async {
     setState(() => _processingId = id);
     try {
-      await _supabase.from('support_tickets').update({'status': 'resolved'}).eq('id', id);
+      await _supabase.from('support_tickets').update({'status': newStatus}).eq('id', id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Ticket Marked as Resolved!'), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(newStatus == 'resolved' ? '✅ Ticket Marked as Resolved!' : '❌ Ticket Rejected!'), 
+            backgroundColor: newStatus == 'resolved' ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
-      debugPrint("Error resolving ticket: $e");
+      debugPrint("Error updating ticket: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('❌ Failed to update status.'), backgroundColor: Colors.red),
@@ -73,7 +77,7 @@ class _AdminSupportPageState extends State<AdminSupportPage> {
         ),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            // Sirf 'open' tickets dikhayenge, jo naye hain
+            // Sirf 'open' (naye) tickets dikhayenge
             stream: _supabase.from('support_tickets').stream(primaryKey: ['id']).eq('status', 'open').order('created_at', ascending: false),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -98,12 +102,14 @@ class _AdminSupportPageState extends State<AdminSupportPage> {
                 itemCount: tickets.length,
                 itemBuilder: (context, index) {
                   final ticket = tickets[index];
-                  final isProcessing = _processingId == ticket['id'];
+                  final ticketId = ticket['id'];
+                  final isProcessing = _processingId == ticketId;
                   final catColor = _getCategoryColor(ticket['category']);
 
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    elevation: 2,
+                    elevation: 3,
+                    color: Colors.orange.shade50, // Naye ticket ko thoda highlight karne ke liye
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -126,7 +132,13 @@ class _AdminSupportPageState extends State<AdminSupportPage> {
                                   style: TextStyle(color: catColor, fontSize: 12, fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              Text(_formatDateTime(ticket['created_at']), style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                              Row(
+                                children: [
+                                  const Icon(Icons.access_time_rounded, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text(_formatDateTime(ticket['created_at']), style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                                ],
+                              ),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -138,29 +150,46 @@ class _AdminSupportPageState extends State<AdminSupportPage> {
                           // Issue Description
                           Container(
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
+                            width: double.infinity,
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
                             child: Text(ticket['description'], style: TextStyle(color: Colors.grey.shade800, fontSize: 14)),
                           ),
                           const SizedBox(height: 12),
                           
                           const Divider(),
                           
-                          // Footer: Email & Action Button
+                          // Footer: Email
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
+                              const Icon(Icons.email, size: 16, color: Colors.grey),
+                              const SizedBox(width: 6),
+                              Text(ticket['email'], style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF6A11CB))),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 12),
+
+                          // 👇 NAYA: Action Buttons (Reject & Resolve)
+                          isProcessing 
+                            ? const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(color: Color(0xFF6A11CB))))
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  const Icon(Icons.email, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 6),
-                                  Text(ticket['email'], style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF6A11CB))),
-                                ],
-                              ),
-                              isProcessing 
-                                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                                : ElevatedButton.icon(
-                                    onPressed: () => _resolveTicket(ticket['id']),
-                                    icon: const Icon(Icons.check, size: 16),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _updateTicketStatus(ticketId, 'rejected'),
+                                    icon: const Icon(Icons.cancel, size: 16),
+                                    label: const Text('Reject'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.red, 
+                                      side: const BorderSide(color: Colors.red),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                      minimumSize: const Size(0, 36)
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _updateTicketStatus(ticketId, 'resolved'),
+                                    icon: const Icon(Icons.check_circle, size: 16),
                                     label: const Text('Resolve'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.green, 
@@ -169,8 +198,8 @@ class _AdminSupportPageState extends State<AdminSupportPage> {
                                       minimumSize: const Size(0, 36)
                                     ),
                                   )
-                            ],
-                          )
+                                ],
+                              )
                         ],
                       ),
                     ),

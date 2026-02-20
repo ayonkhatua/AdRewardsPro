@@ -7,7 +7,7 @@ import 'package:dart_ipify/dart_ipify.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 import 'package:unity_ads_plugin/unity_ads_plugin.dart'; 
 
-import '../admin/admin_dashboard.dart'; // 👇 Admin Dashboard Import fix kiya
+import '../admin/admin_dashboard.dart'; 
 import '../models/app_settings_model.dart';
 
 import 'spin_screen.dart';
@@ -16,9 +16,9 @@ import 'refer_screen.dart';
 import 'withdrawal_screen.dart';
 import 'login_screen.dart'; 
 import 'transaction_screen.dart';
-import 'support_screen.dart'; // 👇 NAYA: Support Screen ko import kiya
+import 'support_screen.dart'; 
+import 'delete_account_screen.dart'; // 👇 NAYA: Delete Account screen import kiya
 
-// CURRENT APP VERSION - Play Store par update karte waqt ise badhana (e.g., 2, 3...)
 const int CURRENT_APP_VERSION = 1;
 
 class HomeScreen extends StatefulWidget {
@@ -37,12 +37,15 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isBlocked = false;
   String _blockReason = "";
   
+  // Admin Check
+  bool _isAdminUser = false; 
+
   // Update States
   bool _isUpdateAvailable = false;
   String _updateUrl = "";
   String _updateMessage = "";
 
-  // Ads & Admin States
+  // Ads States
   bool _adsEnabled = true;
   int _interAdInterval = 5; 
   int _tabTapCount = 0;
@@ -59,9 +62,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _runStartupChecks(); 
   }
 
-  // ==========================================
-  // 🛡️ SECURITY & SYSTEM CHECKS LOGIC
-  // ==========================================
   Future<void> _runStartupChecks() async {
     final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
@@ -69,15 +69,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user == null) return;
 
     try {
-      // 1. Fetch App Settings 
       final response = await supabase.from('app_settings').select().single();
       final settings = AppSettingsModel.fromJson(response);
 
       _adsEnabled = settings.adsEnabled;
       _interAdInterval = settings.interAdInterval;
 
-      // 2. Check Maintenance
-      if (settings.isMaintenance) {
+      if (user.email == settings.adminEmail) {
+        _isAdminUser = true;
+        _adsEnabled = false; 
+      }
+
+      if (settings.isMaintenance && !_isAdminUser) {
         setState(() {
           _isMaintenance = true;
           _isLoading = false;
@@ -85,7 +88,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return; 
       }
 
-      // 3. Check App Update
       if (settings.appVersion > CURRENT_APP_VERSION) {
         setState(() {
           _isUpdateAvailable = true;
@@ -95,14 +97,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _showUpdateDialog();
       }
 
-      // 4: Check if Admin Manually Blocked the User
       final profileData = await supabase.from('profiles').select('is_blocked').eq('id', user.id).single();
       if (profileData['is_blocked'] == true) {
         _blockUser("Your account has been permanently blocked by the Administrator for violating app policies.");
         return; 
       }
 
-      // 5. IP & Device ID Fraud Check
       await _verifyDeviceAndIP(user.id);
 
     } catch (e) {
@@ -177,9 +177,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ==========================================
-  // 📢 UPDATE DIALOG
-  // ==========================================
   void _showUpdateDialog() {
     showDialog(
       context: context,
@@ -208,15 +205,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ==========================================
-  // 📺 TAB SWITCH ADS LOGIC
-  // ==========================================
   void _handleTabSwitch(int index) {
     setState(() {
       _currentIndex = index;
     });
 
-    if (!_adsEnabled) return;
+    if (!_adsEnabled || _isAdminUser) return;
 
     _tabTapCount++;
     if (_tabTapCount >= _interAdInterval) {
@@ -304,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min, 
         children: [
-          if (_adsEnabled)
+          if (_adsEnabled && !_isAdminUser)
             Container(
               color: Colors.white,
               width: double.infinity,
@@ -435,7 +429,6 @@ class _HomeTabState extends State<HomeTab> {
                             icon: const Icon(Icons.admin_panel_settings, color: Colors.orange),
                             tooltip: 'Admin Panel',
                             onPressed: () {
-                              // 👇 NAYA: AdminDashboard par jaayega sidha
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboard()));
                             },
                           ),
@@ -735,13 +728,22 @@ class ProfileTab extends StatelessWidget {
                 },
               ),
               
-              // 👇 NAYA: Help & Support Button
               ListTile(
                 leading: const Icon(Icons.support_agent_rounded, color: Color(0xFF6A11CB)),
                 title: const Text('Help & Support', style: TextStyle(fontWeight: FontWeight.bold)),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const SupportScreen()));
+                },
+              ),
+
+              // 👇 NAYA: Delete Account Button
+              ListTile(
+                leading: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+                title: const Text('Delete Account', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.red),
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const DeleteAccountScreen()));
                 },
               ),
               
