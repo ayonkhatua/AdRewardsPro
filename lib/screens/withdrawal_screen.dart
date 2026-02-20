@@ -15,7 +15,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
   int _walletBalance = 0;
   int _requiredCoins = 0;
   bool _isLoading = false;
-  bool _saveUpi = false; // NAYA: Checkbox ka status track karne ke liye
+  bool _saveUpi = false; 
   
   // Withdrawal settings
   final int _minimumRupeeWithdrawal = 10; 
@@ -23,37 +23,36 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchUserData(); // Function ka naam badal diya kyunki ab ye UPI bhi layega
-    
+    _fetchUserData(); 
     _amountController.addListener(_calculateCoins);
   }
 
-  // NAYA: Sirf balance nahi, ab Saved UPI bhi layenge
   Future<void> _fetchUserData() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      setState(() => _walletBalance = 5000); 
+      setState(() => _walletBalance = 0); 
       return;
     }
 
     try {
       final response = await Supabase.instance.client
           .from('profiles')
-          .select('wallet_balance, saved_upi_id') // UPI ID bhi maangi
+          .select('wallet_balance, saved_upi_id') 
           .eq('id', user.id)
           .single();
 
-      setState(() {
-        _walletBalance = response['wallet_balance'] ?? 0;
-        
-        // Agar pehle se UPI saved hai, to box bhar do aur tick laga do
-        if (response['saved_upi_id'] != null && response['saved_upi_id'].toString().isNotEmpty) {
-          _upiController.text = response['saved_upi_id'];
-          _saveUpi = true;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          _walletBalance = response['wallet_balance'] ?? 0;
+          
+          if (response['saved_upi_id'] != null && response['saved_upi_id'].toString().isNotEmpty) {
+            _upiController.text = response['saved_upi_id'];
+            _saveUpi = true;
+          }
+        });
+      }
     } catch (e) {
-      print("Error: $e");
+      debugPrint("Error fetching user data: $e");
     }
   }
 
@@ -95,7 +94,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
           'amount_in_rupees': rupeeAmount,
           'coins_deducted': _requiredCoins,
           'upi_id': upiId,
-          'status': 'pending',
+          'status': 'pending', // By default pending rahega
         });
 
         // 2. User ke wallet se turant coins kaat lo
@@ -105,20 +104,27 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
             .update({'wallet_balance': newBalance})
             .eq('id', user.id);
 
-        // 3. NAYA: Agar User ne "Save UPI" tick kiya hai, toh profile update karo
+        // 3. Agar User ne "Save UPI" tick kiya hai, toh profile update karo
         if (_saveUpi) {
           await Supabase.instance.client
               .from('profiles')
-              .update({'saved_upi_id': upiId}) // saved_upi_id column update hoga
+              .update({'saved_upi_id': upiId}) 
+              .eq('id', user.id);
+        } else {
+          // Agar untick kiya hai toh database se hata do
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'saved_upi_id': null}) 
               .eq('id', user.id);
         }
             
-        setState(() => _walletBalance = newBalance);
+        if (mounted) {
+          setState(() => _walletBalance = newBalance);
+          _showSnackBar('✅ Withdrawal request sent successfully!', Colors.green);
+        }
       }
 
-      _showSnackBar('Withdrawal request sent successfully!', Colors.green);
       _amountController.clear();
-      // UPI clear nahi karenge agar save kiya hai to
       if (!_saveUpi) _upiController.clear();
       
       Future.delayed(const Duration(seconds: 2), () {
@@ -126,13 +132,15 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
       });
 
     } catch (e) {
+      debugPrint("Withdrawal Error: $e");
       _showSnackBar('Error processing request. Try again.', Colors.red);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _showSnackBar(String message, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
     );
@@ -143,10 +151,11 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FD),
       appBar: AppBar(
-        title: const Text('Withdraw Funds'),
+        title: const Text('Withdraw Funds', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
+        foregroundColor: const Color(0xFF1D1B20),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -235,7 +244,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                 ),
               ),
 
-              // NAYA: Save UPI Checkbox
+              // Save UPI Checkbox
               const SizedBox(height: 10),
               GestureDetector(
                 onTap: () {
@@ -276,7 +285,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                     elevation: 5,
                   ),
                   child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
                     : const Text("WITHDRAW NOW", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1)),
                 ),
               ),

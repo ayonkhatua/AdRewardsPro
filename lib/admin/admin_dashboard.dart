@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// 👇 NAYA: Apna banaya hua model yahan import kiya
+// 👇 Apna banaya hua model yahan import kiya
 import '../models/app_settings_model.dart';
 
 // Aapke saare admin pages
@@ -10,7 +10,8 @@ import 'pages/overview_page.dart';
 import 'pages/ads_control_page.dart';
 import 'pages/rewards_control_page.dart';
 import 'pages/manage_users_page.dart';
-import 'pages/system_control_page.dart'; // 👇 NAYA: System Control Page Import Kiya
+import 'pages/system_control_page.dart'; 
+import 'pages/admin_withdrawals_page.dart'; // 👇 NAYA: Withdrawal Page Import Kiya
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -26,22 +27,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   final _supabase = Supabase.instance.client;
 
-  // 👇 NAYA: Title list mein System Control add kiya
+  // 👇 NAYA: Title list mein Withdrawal Requests add kiya
   final List<String> _titles = [
     'Dashboard Overview',
     'Ads Settings',
     'Rewards Control',
     'Manage Users',
-    'System Control' 
+    'System Control',
+    'Withdrawal Requests' 
   ];
 
-  // 👇 NAYA: Pages list mein SystemControlPage() add kiya
+  // 👇 NAYA: Pages list mein AdminWithdrawalsPage() add kiya
   final List<Widget> _pages = const [
     OverviewPage(),
     AdsControlPage(),
     RewardsControlPage(),
     ManageUsersPage(),
     SystemControlPage(), 
+    AdminWithdrawalsPage(), 
   ];
 
   @override
@@ -61,7 +64,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       // 1. Supabase se saara data laya
       final response = await _supabase.from('app_settings').select().single();
       
-      // 2. Data ko Model mein convert kiya (Magic happens here! ✨)
+      // 2. Data ko Model mein convert kiya
       final settings = AppSettingsModel.fromJson(response);
       
       // 3. Ab safely email check kar rahe hain
@@ -135,9 +138,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             _buildDrawerItem(icon: Icons.ad_units, title: 'Ads Settings', index: 1),
             _buildDrawerItem(icon: Icons.card_giftcard, title: 'Rewards Control', index: 2),
             _buildDrawerItem(icon: Icons.people, title: 'Manage Users', index: 3),
-            
-            // 👇 NAYA: System Control ka Drawer Button add kiya
             _buildDrawerItem(icon: Icons.settings_system_daydream, title: 'System Control', index: 4), 
+            
+            // 👇 NAYA: Withdrawal Requests ka Drawer Button add kiya
+            _buildDrawerItem(icon: Icons.payment, title: 'Withdrawal Requests', index: 5), 
             
             const Divider(),
             ListTile(
