@@ -17,7 +17,8 @@ import 'withdrawal_screen.dart';
 import 'login_screen.dart'; 
 import 'transaction_screen.dart';
 import 'support_screen.dart'; 
-import 'delete_account_screen.dart'; // 👇 NAYA: Delete Account screen import kiya
+import 'delete_account_screen.dart'; 
+import 'privacy_policy_screen.dart'; // 👇 NAYA: Privacy Policy screen import kiya
 
 const int CURRENT_APP_VERSION = 1;
 
@@ -728,6 +729,16 @@ class ProfileTab extends StatelessWidget {
                 },
               ),
               
+              // 👇 NAYA: Privacy Policy Button
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_rounded, color: Color(0xFF6A11CB)),
+                title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.bold)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()));
+                },
+              ),
+
               ListTile(
                 leading: const Icon(Icons.support_agent_rounded, color: Color(0xFF6A11CB)),
                 title: const Text('Help & Support', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -737,7 +748,6 @@ class ProfileTab extends StatelessWidget {
                 },
               ),
 
-              // 👇 NAYA: Delete Account Button
               ListTile(
                 leading: const Icon(Icons.delete_forever_rounded, color: Colors.red),
                 title: const Text('Delete Account', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
