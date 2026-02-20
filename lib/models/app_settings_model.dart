@@ -5,6 +5,15 @@ class AppSettingsModel {
   final int maxScratchReward;
   final bool adsEnabled;
   final String adminEmail;
+  
+  final bool isTestMode;
+  final bool isMaintenance;
+  final int appVersion;
+  final String updateUrl;
+  final String updateMessage;
+  
+  // 👇 EK AUR NAYA FIELD: Tab Switch Ad Interval ke liye
+  final int interAdInterval;
 
   AppSettingsModel({
     required this.id,
@@ -13,9 +22,15 @@ class AppSettingsModel {
     required this.maxScratchReward,
     required this.adsEnabled,
     required this.adminEmail,
+    required this.isTestMode,
+    required this.isMaintenance,
+    required this.appVersion,
+    required this.updateUrl,
+    required this.updateMessage,
+    // 👇 CONSTRUCTOR MEIN ADD KIYA
+    required this.interAdInterval,
   });
 
-  // 👇 Supabase se aane wale raw data (Map) ko Dart Object mein badalne ke liye
   factory AppSettingsModel.fromJson(Map<String, dynamic> json) {
     return AppSettingsModel(
       id: json['id'] ?? 1,
@@ -24,10 +39,16 @@ class AppSettingsModel {
       maxScratchReward: json['max_scratch_reward'] ?? 50,
       adsEnabled: json['ads_enabled'] ?? true,
       adminEmail: json['admin_email'] ?? '',
+      isTestMode: json['is_test_mode'] ?? true, 
+      isMaintenance: json['is_maintenance'] ?? false,
+      appVersion: json['app_version'] ?? 1,
+      updateUrl: json['update_url'] ?? '',
+      updateMessage: json['update_message'] ?? 'A new update is available. Please update the app to continue earning.',
+      // 👇 JSON SE NIKALNE KE LIYE (Default 5 set kiya hai)
+      interAdInterval: json['inter_ad_interval'] ?? 5,
     );
   }
 
-  // 👇 Dart Object ko wapas Supabase mein save karne layak (Map) banane ke liye
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -36,6 +57,13 @@ class AppSettingsModel {
       'max_scratch_reward': maxScratchReward,
       'ads_enabled': adsEnabled,
       'admin_email': adminEmail,
+      'is_test_mode': isTestMode,
+      'is_maintenance': isMaintenance,
+      'app_version': appVersion,
+      'update_url': updateUrl,
+      'update_message': updateMessage,
+      // 👇 WAPAS JSON BANANE KE LIYE
+      'inter_ad_interval': interAdInterval,
     };
   }
 }

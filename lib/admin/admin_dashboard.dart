@@ -10,6 +10,7 @@ import 'pages/overview_page.dart';
 import 'pages/ads_control_page.dart';
 import 'pages/rewards_control_page.dart';
 import 'pages/manage_users_page.dart';
+import 'pages/system_control_page.dart'; // 👇 NAYA: System Control Page Import Kiya
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -25,18 +26,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   final _supabase = Supabase.instance.client;
 
+  // 👇 NAYA: Title list mein System Control add kiya
   final List<String> _titles = [
     'Dashboard Overview',
     'Ads Settings',
     'Rewards Control',
-    'Manage Users'
+    'Manage Users',
+    'System Control' 
   ];
 
+  // 👇 NAYA: Pages list mein SystemControlPage() add kiya
   final List<Widget> _pages = const [
     OverviewPage(),
     AdsControlPage(),
     RewardsControlPage(),
     ManageUsersPage(),
+    SystemControlPage(), 
   ];
 
   @override
@@ -130,6 +135,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             _buildDrawerItem(icon: Icons.ad_units, title: 'Ads Settings', index: 1),
             _buildDrawerItem(icon: Icons.card_giftcard, title: 'Rewards Control', index: 2),
             _buildDrawerItem(icon: Icons.people, title: 'Manage Users', index: 3),
+            
+            // 👇 NAYA: System Control ka Drawer Button add kiya
+            _buildDrawerItem(icon: Icons.settings_system_daydream, title: 'System Control', index: 4), 
+            
             const Divider(),
             ListTile(
               leading: const Icon(Icons.exit_to_app, color: Colors.red),

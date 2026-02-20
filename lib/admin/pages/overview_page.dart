@@ -33,7 +33,7 @@ class OverviewPage extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(colors: [Color(0xFF6A11CB), Color(0xFF2575FC)]),
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))],
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))],
                 ),
                 child: Row(
                   children: [
