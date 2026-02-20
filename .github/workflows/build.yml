@@ -39,21 +39,20 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release --no-tree-shake-icons
 
-            # 6. SIGN APK (Keystore se digital sign karna)
+      # 6. SIGN APK (Ye naya action hai jo perfectly kaam karega)
       - name: Sign Release APK
-        uses: r0adkll/sign-android-release@v1
+        uses: ilharp/sign-android-release@v1
         id: sign_app
         with:
-          releaseDirectory: build/app/outputs/flutter-apk
-          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
+          releaseDir: build/app/outputs/flutter-apk
+          signingKey: ${{ secrets.KEYSTORE_BASE64 }}
+          keyAlias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
-          buildToolsVersion: 34.0.0  # 👇 NAYA ADD KIYA: Ye error fix kar dega
 
       # 7. Upload Signed APK
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
           name: AdRewards-Pro-Signed-APK
-          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          path: ${{ steps.sign_app.outputs.signedFile }}
