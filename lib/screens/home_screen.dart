@@ -18,7 +18,7 @@ import 'login_screen.dart';
 import 'transaction_screen.dart';
 import 'support_screen.dart'; 
 import 'delete_account_screen.dart'; 
-import 'privacy_policy_screen.dart'; // 👇 NAYA: Privacy Policy screen import kiya
+import 'privacy_policy_screen.dart'; 
 
 const int CURRENT_APP_VERSION = 1;
 
@@ -366,9 +366,135 @@ class _HomeTabState extends State<HomeTab> {
           .map((data) => data.isNotEmpty ? data.first : {});
           
       _checkAdminStatus(user.email);
+      _checkReferralStatus(); // 👇 NAYA: Yahan hum referral check kar rahe hain
     } else {
       _userStream = Stream.value({}); 
     }
+  }
+
+  // 👇 NAYA: Database check for empty referred_by
+  Future<void> _checkReferralStatus() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('referred_by')
+          .eq('id', user.id)
+          .single();
+
+      // Agar kisi ne abhi tak code nahi dala hai, toh thodi der baad popup dikhao
+      if (response['referred_by'] == null) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) _showReferralPopup();
+        });
+      }
+    } catch (e) {
+      debugPrint("Referral Check Error: $e");
+    }
+  }
+
+  // 👇 NAYA: Popup jisme user apne dost ka code dalega
+  void _showReferralPopup() {
+    final TextEditingController codeController = TextEditingController();
+    bool isVerifying = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User ko skip ya apply karna hi padega
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.card_giftcard_rounded, color: Color(0xFF6750A4)),
+              SizedBox(width: 8),
+              Text("Welcome Bonus!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Got an invite code? Enter it below to link your account and claim future rewards.", style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: codeController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: "Enter Referral Code",
+                  filled: true,
+                  fillColor: const Color(0xFFFDF8FD),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), 
+              child: const Text("SKIP", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              onPressed: isVerifying ? null : () async {
+                final code = codeController.text.trim().toUpperCase();
+                if (code.isEmpty) return;
+
+                setDialogState(() => isVerifying = true);
+
+                try {
+                  final supabase = Supabase.instance.client;
+                  final currentUser = supabase.auth.currentUser;
+
+                  // 1. Check karo ki ye code kiska hai
+                  final referrerResponse = await supabase
+                      .from('profiles')
+                      .select('id')
+                      .eq('referral_code', code)
+                      .maybeSingle();
+
+                  if (referrerResponse == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Invalid Code!"), backgroundColor: Colors.red));
+                    setDialogState(() => isVerifying = false);
+                    return;
+                  }
+
+                  if (referrerResponse['id'] == currentUser?.id) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You can't use your own code!"), backgroundColor: Colors.orange));
+                    setDialogState(() => isVerifying = false);
+                    return;
+                  }
+
+                  // 2. Code sahi hai, account link kar do
+                  await supabase
+                      .from('profiles')
+                      .update({'referred_by': referrerResponse['id']})
+                      .eq('id', currentUser!.id);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Account Linked Successfully!"), backgroundColor: Colors.green));
+                  }
+
+                } catch (e) {
+                  debugPrint("Referral Link Error: $e");
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("An error occurred!"), backgroundColor: Colors.red));
+                  setDialogState(() => isVerifying = false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6750A4), 
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+              ),
+              child: isVerifying 
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text("APPLY", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _checkAdminStatus(String? userEmail) async {
@@ -729,7 +855,6 @@ class ProfileTab extends StatelessWidget {
                 },
               ),
               
-              // 👇 NAYA: Privacy Policy Button
               ListTile(
                 leading: const Icon(Icons.privacy_tip_rounded, color: Color(0xFF6A11CB)),
                 title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.bold)),
