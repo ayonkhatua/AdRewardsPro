@@ -20,7 +20,7 @@ dependencies:
   scratcher: ^2.4.0             # Scratch card effect ke liye
   
   # Local Storage (Timer aur data save karne ke liye)
-  shared_preferences: ^2.5.4    # NAYA ADD KIYA HAI
+  shared_preferences: ^2.5.4    
 
   # Monetization (Ads)
   unity_ads_plugin: ^0.3.11     # Unity ads ke liye
@@ -37,13 +37,18 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1 # 👇 NAYA: Package add kiya
 
 flutter:
   uses-material-design: true
   
-  # 👇 Bilkul aise hi spacing honi chahiye
   assets:
     - .env
+    - assets/icon/ # 👇 NAYA: Folder path de diya taaki image mil jaye
 
-  # Assets folder baad me yahan add karenge
-  #   - assets/images/
+# 👇 NAYA: App icon generate karne ki settings
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
