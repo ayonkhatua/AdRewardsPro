@@ -20,7 +20,7 @@ dependencies:
   scratcher: ^2.4.0             # Scratch card effect ke liye
   
   # Local Storage (Timer aur data save karne ke liye)
-  shared_preferences: ^2.2.2    # NAYA ADD KIYA HAI
+  shared_preferences: ^2.5.4    # NAYA ADD KIYA HAI
 
   # Monetization (Ads)
   unity_ads_plugin: ^0.3.11     # Unity ads ke liye

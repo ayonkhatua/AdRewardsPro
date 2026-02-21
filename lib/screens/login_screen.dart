@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io'; // 👇 NAYA: Device info ke liye
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:device_info_plus/device_info_plus.dart'; // 👇 NAYA: Device ID nikalne ke liye
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -25,10 +27,14 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // 👇 Listener: Jaise hi browser se login complete hoga, ye Home Screen bhej dega
-    _authSubscription = supabase.auth.onAuthStateChange.listen((data) {
+    
+    // 👇 UPDATED: Listener ab direct Home par nahi bhejega, pehle Device ID check karega
+    _authSubscription = supabase.auth.onAuthStateChange.listen((data) async {
       if (data.event == AuthChangeEvent.signedIn) {
-        _navigateToHome();
+        final user = data.session?.user;
+        if (user != null) {
+          await _processStrictLoginCheck(user.id);
+        }
       }
     });
   }
@@ -38,8 +44,85 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _referralController.dispose();
-    _authSubscription.cancel(); // Listener band karna zaroori hai
+    _authSubscription.cancel(); 
     super.dispose();
+  }
+
+  // ==========================================
+  // 🛡️ STRICT DEVICE ID VERIFICATION LOGIC
+  // ==========================================
+  Future<void> _processStrictLoginCheck(String currentUserId) async {
+    setState(() => _isLoading = true);
+    
+    try {
+      // 1. Phone ka actual Device ID nikalo
+      final deviceInfo = DeviceInfoPlugin();
+      String currentDeviceId = 'unknown_device';
+      
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        currentDeviceId = androidInfo.id;
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        currentDeviceId = iosInfo.identifierForVendor ?? 'unknown_ios';
+      }
+
+      // 2. Database mein check karo kya is Device ID par koi AUR account hai?
+      final existingAccounts = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('device_id', currentDeviceId)
+          .neq('id', currentUserId);
+
+      // 3. Agar koi purana account mil gaya -> Strict Block!
+      if (existingAccounts.isNotEmpty) {
+        await supabase.auth.signOut(); // Naye account ko turant bahar phenko
+        if (mounted) {
+          _showDeviceRestrictedDialog();
+        }
+      } else {
+        // 4. Clean Device! Is naye user ke sath ye Device ID link kar do
+        await supabase
+            .from('profiles')
+            .update({'device_id': currentDeviceId})
+            .eq('id', currentUserId);
+            
+        _navigateToHome();
+      }
+    } catch (e) {
+      _showSnackBar("Security check failed: $e", Colors.red);
+      await supabase.auth.signOut();
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showDeviceRestrictedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('Device Restricted', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'This device is already linked to another AdRewards Pro account.\n\nTo create or use a new account, you must first log in to your ORIGINAL account and select "Delete Account" from the Profile Settings.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6A11CB), foregroundColor: Colors.white),
+            child: const Text('UNDERSTOOD', style: TextStyle(fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
   }
 
   // ==========================================
@@ -67,21 +150,17 @@ class _LoginScreenState extends State<LoginScreen> {
           if (referralCode.isNotEmpty) {
              await _processReferralCode(res.user!.id, referralCode);
           }
-          _showSnackBar('Account created! Please Login.', Colors.green);
-          setState(() {
-            _isLoginMode = true;
-            _referralController.clear();
-            _passwordController.clear();
-          });
+          _showSnackBar('Account created! Logging in...', Colors.green);
+          // Note: AuthListener automatically handle karega aage ka process
         }
       }
     } on AuthException catch (e) {
       _showSnackBar(e.message, Colors.red);
+      setState(() => _isLoading = false);
     } catch (e) {
       _showSnackBar('Error: $e', Colors.red);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+      setState(() => _isLoading = false);
+    } 
   }
 
   Future<void> _processReferralCode(String newUserId, String enteredCode) async {
@@ -99,18 +178,17 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _googleSignIn() async {
     setState(() => _isLoading = true);
     try {
-      // Direct browser open karega
       await supabase.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: 'com.hypernest.adrewardspro://login-callback',
       );
     } on AuthException catch (e) {
       _showSnackBar(e.message, Colors.red);
+      setState(() => _isLoading = false);
     } catch (e) {
       _showSnackBar('Error: $e', Colors.red);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+      setState(() => _isLoading = false);
+    } 
   }
 
   void _navigateToHome() {

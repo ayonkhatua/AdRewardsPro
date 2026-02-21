@@ -6,6 +6,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dart_ipify/dart_ipify.dart'; 
 import 'package:url_launcher/url_launcher.dart'; 
 import 'package:unity_ads_plugin/unity_ads_plugin.dart'; 
+import 'package:shared_preferences/shared_preferences.dart'; // 👇 NAYA: Popup One-time ke liye
 
 import '../admin/admin_dashboard.dart'; 
 import '../models/app_settings_model.dart';
@@ -35,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // System States
   bool _isLoading = true;
   bool _isMaintenance = false;
-  bool _isBlocked = false;
+  bool _isBlocked = false; // Ye ab sirf temporary UI block ke liye hai
   String _blockReason = "";
   
   // Admin Check
@@ -98,9 +99,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _showUpdateDialog();
       }
 
+      // Permanent Admin Block Check
       final profileData = await supabase.from('profiles').select('is_blocked').eq('id', user.id).single();
       if (profileData['is_blocked'] == true) {
-        _blockUser("Your account has been permanently blocked by the Administrator for violating app policies.");
+        _restrictAccess("Your account has been permanently blocked by the Administrator.");
         return; 
       }
 
@@ -115,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // 👇 NAYA: Ye temporary network check karega
   Future<void> _verifyDeviceAndIP(String currentUserId) async {
     try {
       final supabase = Supabase.instance.client;
@@ -142,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .neq('id', currentUserId);
           
       if (deviceCheck.isNotEmpty) {
-        _blockUser("Multiple accounts detected on this device. Dual Apps are not allowed.");
+        _restrictAccess("Multiple accounts detected on this device. Dual Apps are not allowed.");
         return;
       }
 
@@ -153,11 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
             .neq('id', currentUserId);
             
         if (ipCheck.isNotEmpty) {
-          _blockUser("Multiple accounts detected on this Wi-Fi Network. Only 1 account per network is allowed.");
+          // DATABASE BLOCK NAHI HOGA! Sirf UI Block hoga
+          _restrictAccess("Multiple accounts detected on this Wi-Fi Network. Only 1 account per network is allowed.");
           return;
         }
       }
 
+      // Agar IP clean hai, tabhi update karo
       await supabase.from('profiles').update({
         'device_id': deviceId,
         'last_ip': currentIp,
@@ -168,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _blockUser(String message) {
+  void _restrictAccess(String message) {
     if (mounted) {
       setState(() {
         _isBlocked = true;
@@ -272,6 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    // 👇 NAYA: Temporary Restriction UI jisse user network change karke wapas aa sake
     if (_isBlocked) {
       return Scaffold(
         backgroundColor: Colors.red.shade50,
@@ -281,11 +287,35 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.block_flipped, size: 80, color: Colors.red),
+                const Icon(Icons.wifi_off_rounded, size: 80, color: Colors.red),
                 const SizedBox(height: 20),
-                const Text("Access Denied", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
+                const Text("Network Restricted", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
                 const SizedBox(height: 10),
                 Text(_blockReason, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                const Text("Please switch to Mobile Data or a different Wi-Fi and click Try Again.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 14)),
+                const SizedBox(height: 30),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _isBlocked = false;
+                      _isLoading = true;
+                    });
+                    _runStartupChecks(); // Wapas check karega
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text("Try Again"),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6A11CB), foregroundColor: Colors.white),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await Supabase.instance.client.auth.signOut();
+                    if(mounted) {
+                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+                    }
+                  }, 
+                  child: const Text("Logout", style: TextStyle(color: Colors.red)),
+                )
               ],
             ),
           ),
@@ -366,16 +396,22 @@ class _HomeTabState extends State<HomeTab> {
           .map((data) => data.isNotEmpty ? data.first : {});
           
       _checkAdminStatus(user.email);
-      _checkReferralStatus(); // 👇 NAYA: Yahan hum referral check kar rahe hain
+      _checkReferralStatus(); 
     } else {
       _userStream = Stream.value({}); 
     }
   }
 
-  // 👇 NAYA: Database check for empty referred_by
+  // 👇 NAYA: SharedPreferences setup to show popup only once
   Future<void> _checkReferralStatus() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    bool isPopupShown = prefs.getBool('referral_popup_shown_${user.id}') ?? false;
+    
+    // Agar user pehle dekh chuka hai, toh dobara nahi aayega
+    if (isPopupShown) return;
 
     try {
       final response = await Supabase.instance.client
@@ -384,10 +420,9 @@ class _HomeTabState extends State<HomeTab> {
           .eq('id', user.id)
           .single();
 
-      // Agar kisi ne abhi tak code nahi dala hai, toh thodi der baad popup dikhao
       if (response['referred_by'] == null) {
         Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) _showReferralPopup();
+          if (mounted) _showReferralPopup(prefs, user.id);
         });
       }
     } catch (e) {
@@ -395,14 +430,13 @@ class _HomeTabState extends State<HomeTab> {
     }
   }
 
-  // 👇 NAYA: Popup jisme user apne dost ka code dalega
-  void _showReferralPopup() {
+  void _showReferralPopup(SharedPreferences prefs, String userId) {
     final TextEditingController codeController = TextEditingController();
     bool isVerifying = false;
 
     showDialog(
       context: context,
-      barrierDismissible: false, // User ko skip ya apply karna hi padega
+      barrierDismissible: false, 
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -432,7 +466,11 @@ class _HomeTabState extends State<HomeTab> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context), 
+              onPressed: () async {
+                // 👇 NAYA: SKIP dabane par phone me flag save ho jayega
+                await prefs.setBool('referral_popup_shown_$userId', true);
+                if (context.mounted) Navigator.pop(context);
+              }, 
               child: const Text("SKIP", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
             ),
             ElevatedButton(
@@ -446,7 +484,6 @@ class _HomeTabState extends State<HomeTab> {
                   final supabase = Supabase.instance.client;
                   final currentUser = supabase.auth.currentUser;
 
-                  // 1. Check karo ki ye code kiska hai
                   final referrerResponse = await supabase
                       .from('profiles')
                       .select('id')
@@ -465,11 +502,13 @@ class _HomeTabState extends State<HomeTab> {
                     return;
                   }
 
-                  // 2. Code sahi hai, account link kar do
                   await supabase
                       .from('profiles')
                       .update({'referred_by': referrerResponse['id']})
                       .eq('id', currentUser!.id);
+
+                  // 👇 NAYA: SUCCESS hone par bhi flag save ho jayega
+                  await prefs.setBool('referral_popup_shown_$userId', true);
 
                   if (context.mounted) {
                     Navigator.pop(context);
