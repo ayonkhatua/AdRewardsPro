@@ -12,8 +12,13 @@ class AppSettingsModel {
   final String updateUrl;
   final String updateMessage;
   
-  // 👇 EK AUR NAYA FIELD: Tab Switch Ad Interval ke liye
+  // Tab Switch Ad Interval ke liye
   final int interAdInterval;
+
+  // 👇 NAYE FIELDS: Economy aur Referral System ke liye
+  final int minWithdrawalLimit;
+  final int referralBonusAmount;
+  final int joiningBonusAmount;
 
   AppSettingsModel({
     required this.id,
@@ -27,8 +32,11 @@ class AppSettingsModel {
     required this.appVersion,
     required this.updateUrl,
     required this.updateMessage,
-    // 👇 CONSTRUCTOR MEIN ADD KIYA
     required this.interAdInterval,
+    // 👇 CONSTRUCTOR MEIN ADD KIYE
+    required this.minWithdrawalLimit,
+    required this.referralBonusAmount,
+    required this.joiningBonusAmount,
   });
 
   factory AppSettingsModel.fromJson(Map<String, dynamic> json) {
@@ -44,8 +52,11 @@ class AppSettingsModel {
       appVersion: json['app_version'] ?? 1,
       updateUrl: json['update_url'] ?? '',
       updateMessage: json['update_message'] ?? 'A new update is available. Please update the app to continue earning.',
-      // 👇 JSON SE NIKALNE KE LIYE (Default 5 set kiya hai)
       interAdInterval: json['inter_ad_interval'] ?? 5,
+      // 👇 JSON SE NIKALNE KE LIYE (Defaults set kiye hain)
+      minWithdrawalLimit: json['min_withdrawal_limit'] ?? 500,
+      referralBonusAmount: json['referral_bonus_amount'] ?? 100,
+      joiningBonusAmount: json['joining_bonus_amount'] ?? 50,
     );
   }
 
@@ -62,8 +73,11 @@ class AppSettingsModel {
       'app_version': appVersion,
       'update_url': updateUrl,
       'update_message': updateMessage,
-      // 👇 WAPAS JSON BANANE KE LIYE
       'inter_ad_interval': interAdInterval,
+      // 👇 WAPAS JSON BANANE KE LIYE
+      'min_withdrawal_limit': minWithdrawalLimit,
+      'referral_bonus_amount': referralBonusAmount,
+      'joining_bonus_amount': joiningBonusAmount,
     };
   }
 }

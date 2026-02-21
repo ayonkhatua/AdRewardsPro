@@ -6,7 +6,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dart_ipify/dart_ipify.dart'; 
 import 'package:url_launcher/url_launcher.dart'; 
 import 'package:unity_ads_plugin/unity_ads_plugin.dart'; 
-import 'package:shared_preferences/shared_preferences.dart'; // 👇 NAYA: Popup One-time ke liye
+import 'package:shared_preferences/shared_preferences.dart'; 
 
 import '../admin/admin_dashboard.dart'; 
 import '../models/app_settings_model.dart';
@@ -36,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // System States
   bool _isLoading = true;
   bool _isMaintenance = false;
-  bool _isBlocked = false; // Ye ab sirf temporary UI block ke liye hai
+  bool _isBlocked = false; 
   String _blockReason = "";
   
   // Admin Check
@@ -99,7 +99,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _showUpdateDialog();
       }
 
-      // Permanent Admin Block Check
       final profileData = await supabase.from('profiles').select('is_blocked').eq('id', user.id).single();
       if (profileData['is_blocked'] == true) {
         _restrictAccess("Your account has been permanently blocked by the Administrator.");
@@ -117,7 +116,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 👇 NAYA: Ye temporary network check karega
   Future<void> _verifyDeviceAndIP(String currentUserId) async {
     try {
       final supabase = Supabase.instance.client;
@@ -156,13 +154,11 @@ class _HomeScreenState extends State<HomeScreen> {
             .neq('id', currentUserId);
             
         if (ipCheck.isNotEmpty) {
-          // DATABASE BLOCK NAHI HOGA! Sirf UI Block hoga
           _restrictAccess("Multiple accounts detected on this Wi-Fi Network. Only 1 account per network is allowed.");
           return;
         }
       }
 
-      // Agar IP clean hai, tabhi update karo
       await supabase.from('profiles').update({
         'device_id': deviceId,
         'last_ip': currentIp,
@@ -277,7 +273,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // 👇 NAYA: Temporary Restriction UI jisse user network change karke wapas aa sake
     if (_isBlocked) {
       return Scaffold(
         backgroundColor: Colors.red.shade50,
@@ -301,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _isBlocked = false;
                       _isLoading = true;
                     });
-                    _runStartupChecks(); // Wapas check karega
+                    _runStartupChecks(); 
                   },
                   icon: const Icon(Icons.refresh),
                   label: const Text("Try Again"),
@@ -402,7 +397,6 @@ class _HomeTabState extends State<HomeTab> {
     }
   }
 
-  // 👇 NAYA: SharedPreferences setup to show popup only once
   Future<void> _checkReferralStatus() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
@@ -410,7 +404,6 @@ class _HomeTabState extends State<HomeTab> {
     final prefs = await SharedPreferences.getInstance();
     bool isPopupShown = prefs.getBool('referral_popup_shown_${user.id}') ?? false;
     
-    // Agar user pehle dekh chuka hai, toh dobara nahi aayega
     if (isPopupShown) return;
 
     try {
@@ -450,7 +443,7 @@ class _HomeTabState extends State<HomeTab> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("Got an invite code? Enter it below to link your account and claim future rewards.", style: TextStyle(color: Colors.grey)),
+              const Text("Got an invite code? Enter it below to link your account and claim your joining bonus.", style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 20),
               TextField(
                 controller: codeController,
@@ -467,7 +460,6 @@ class _HomeTabState extends State<HomeTab> {
           actions: [
             TextButton(
               onPressed: () async {
-                // 👇 NAYA: SKIP dabane par phone me flag save ho jayega
                 await prefs.setBool('referral_popup_shown_$userId', true);
                 if (context.mounted) Navigator.pop(context);
               }, 
@@ -484,6 +476,7 @@ class _HomeTabState extends State<HomeTab> {
                   final supabase = Supabase.instance.client;
                   final currentUser = supabase.auth.currentUser;
 
+                  // 1. Check code kiska hai
                   final referrerResponse = await supabase
                       .from('profiles')
                       .select('id')
@@ -502,17 +495,40 @@ class _HomeTabState extends State<HomeTab> {
                     return;
                   }
 
+                  // 👇 NAYA LOGIC: Admin Panel se Joining Bonus uthao aur User ko do
+                  
+                  // 1. Fetch Setting
+                  final settings = await supabase
+                      .from('app_settings')
+                      .select('joining_bonus_amount')
+                      .single();
+                  
+                  int bonus = settings['joining_bonus_amount'] ?? 50;
+
+                  // 2. Fetch User's current balance
+                  final profile = await supabase
+                      .from('profiles')
+                      .select('wallet_balance')
+                      .eq('id', currentUser!.id)
+                      .single();
+                  
+                  int currentBalance = profile['wallet_balance'] ?? 0;
+                  int newBalance = currentBalance + bonus;
+
+                  // 3. Database mein user ko code link karo aur paise do
                   await supabase
                       .from('profiles')
-                      .update({'referred_by': referrerResponse['id']})
-                      .eq('id', currentUser!.id);
+                      .update({
+                        'referred_by': referrerResponse['id'],
+                        'wallet_balance': newBalance // 💰 Bonus yahan mila!
+                      })
+                      .eq('id', currentUser.id);
 
-                  // 👇 NAYA: SUCCESS hone par bhi flag save ho jayega
                   await prefs.setBool('referral_popup_shown_$userId', true);
 
                   if (context.mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Account Linked Successfully!"), backgroundColor: Colors.green));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ Code Applied! You got $bonus Coins."), backgroundColor: Colors.green));
                   }
 
                 } catch (e) {

@@ -12,33 +12,36 @@ class ReferScreen extends StatefulWidget {
 
 class _ReferScreenState extends State<ReferScreen> {
   String _referralCode = "LOADING...";
-  int _referralBonus = 100; // 👇 NAYA: Default bonus amount
+  int _referralBonus = 100; // Default referrer bonus
+  int _joiningBonus = 50;   // 👇 NAYA: Default joining bonus for friend
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchData(); // 👇 NAYA: Ab dono cheezein ek sath aayengi
+    _fetchData(); 
   }
 
-  // Database se Referral Code aur Admin Bonus Limit nikalna
+  // Database se Referral Code aur Admin Bonus Limits nikalna
   Future<void> _fetchData() async {
     final user = Supabase.instance.client.auth.currentUser;
 
     try {
-      // 1. Admin Panel se dynamic bonus amount fetch karo
+      // 1. Admin Panel se DONO dynamic bonus fetch karo
       final settingsResponse = await Supabase.instance.client
           .from('app_settings')
-          .select('referral_bonus_amount')
+          .select('referral_bonus_amount, joining_bonus_amount') // 👇 NAYA: Joining bonus bhi fetch kiya
           .single();
           
-      int fetchedBonus = settingsResponse['referral_bonus_amount'] ?? 100;
+      int fetchedReferBonus = settingsResponse['referral_bonus_amount'] ?? 100;
+      int fetchedJoinBonus = settingsResponse['joining_bonus_amount'] ?? 50;
 
       if (user == null) {
         if (mounted) {
           setState(() {
             _referralCode = "AYON123"; 
-            _referralBonus = fetchedBonus;
+            _referralBonus = fetchedReferBonus;
+            _joiningBonus = fetchedJoinBonus;
             _isLoading = false;
           });
         }
@@ -55,7 +58,8 @@ class _ReferScreenState extends State<ReferScreen> {
       if (mounted) {
         setState(() {
           _referralCode = profileResponse['referral_code'] ?? "NO_CODE";
-          _referralBonus = fetchedBonus;
+          _referralBonus = fetchedReferBonus;
+          _joiningBonus = fetchedJoinBonus;
           _isLoading = false;
         });
       }
@@ -77,8 +81,8 @@ class _ReferScreenState extends State<ReferScreen> {
   }
 
   void _shareCode() {
-    // Swift Chat ke liye Professional Share Message
-    final String shareMessage = "Hey! I'm connecting with friends on Swift Chat. 🚀\n\nDownload the app, use my Invite Code: *$_referralCode* and let's chat!\n\nJoin me now!";
+    // 👇 NAYA: AdRewards Pro ke liye Earning Share Message (with Joining Bonus info)
+    final String shareMessage = "Hey! I'm earning real money on AdRewards Pro. 🚀\n\nDownload the app, use my Invite Code: *$_referralCode* and get an instant $_joiningBonus Coins Welcome Bonus!\n\nLet's earn together!";
     
     Share.share(shareMessage); 
   }
@@ -88,7 +92,7 @@ class _ReferScreenState extends State<ReferScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FD), 
       appBar: AppBar(
-        title: const Text('Invite Friends', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Refer & Earn', style: TextStyle(fontWeight: FontWeight.bold)), // 👇 TEXT UPDATE
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -118,13 +122,13 @@ class _ReferScreenState extends State<ReferScreen> {
 
                 // 2. MAIN HEADING
                 const Text(
-                  "Invite Friends to Chat",
+                  "Invite Friends & Earn", // 👇 TEXT UPDATE
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF1D1B20)),
                 ),
                 
                 const SizedBox(height: 20),
 
-                // 3. STRICT CONDITION TEXT (Dynamic Bonus ke sath)
+                // 3. STRICT CONDITION TEXT (Earning Theme)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -138,15 +142,15 @@ class _ReferScreenState extends State<ReferScreen> {
                       const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.security_rounded, color: Color(0xFF146C2E), size: 24),
+                          Icon(Icons.verified_rounded, color: Color(0xFF146C2E), size: 24), // 👇 ICON UPDATE
                           SizedBox(width: 8),
-                          Text("Secure Connection", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF146C2E))),
+                          Text("Verified Reward", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF146C2E))),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      // 👇 NAYA: Yahan UI mein dynamic bonus amount dikhega
+                      // 👇 NAYA: Both bonuses mentioned clearly
                       Text(
-                        "You will receive $_referralBonus Bonus Coins when your friend signs up and starts messaging securely on Swift Chat.",
+                        "You will receive $_referralBonus Coins when your friend joins AdRewards Pro using your code. Your friend will also get $_joiningBonus Coins instantly!",
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: Color(0xFF311300), fontSize: 14, fontWeight: FontWeight.w600, height: 1.5),
                       ),

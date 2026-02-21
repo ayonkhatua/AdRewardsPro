@@ -11,6 +11,7 @@ class AdminSettingsPage extends StatefulWidget {
 class _AdminSettingsPageState extends State<AdminSettingsPage> {
   final TextEditingController _withdrawLimitController = TextEditingController();
   final TextEditingController _referBonusController = TextEditingController();
+  final TextEditingController _joiningBonusController = TextEditingController(); // 👇 NAYA: Joining Bonus Controller
   
   bool _isLoading = true;
   bool _isSaving = false;
@@ -26,13 +27,16 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     try {
       final response = await Supabase.instance.client
           .from('app_settings')
-          .select('min_withdrawal_limit, referral_bonus_amount')
+          // 👇 NAYA: joining_bonus_amount fetch kiya
+          .select('min_withdrawal_limit, referral_bonus_amount, joining_bonus_amount')
           .limit(1)
           .single();
 
       setState(() {
-        _withdrawLimitController.text = response['min_withdrawal_limit']?.toString() ?? '100';
-        _referBonusController.text = response['referral_bonus_amount']?.toString() ?? '50';
+        _withdrawLimitController.text = response['min_withdrawal_limit']?.toString() ?? '500';
+        _referBonusController.text = response['referral_bonus_amount']?.toString() ?? '100';
+        // 👇 NAYA: Controller ko value assign ki
+        _joiningBonusController.text = response['joining_bonus_amount']?.toString() ?? '50';
         _isLoading = false;
       });
     } catch (e) {
@@ -48,7 +52,9 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
 
   // 2. Nayi values Supabase mein Save karna
   Future<void> _saveSettings() async {
-    if (_withdrawLimitController.text.isEmpty || _referBonusController.text.isEmpty) {
+    if (_withdrawLimitController.text.isEmpty || 
+        _referBonusController.text.isEmpty || 
+        _joiningBonusController.text.isEmpty) { // 👇 NAYA: Empty check update kiya
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Fields cannot be empty!'), backgroundColor: Colors.orange),
       );
@@ -60,6 +66,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     try {
       final withdrawLimit = int.parse(_withdrawLimitController.text);
       final referBonus = int.parse(_referBonusController.text);
+      final joiningBonus = int.parse(_joiningBonusController.text); // 👇 NAYA: Value get ki
 
       // App Settings table ki pehli row update karna
       final response = await Supabase.instance.client
@@ -71,6 +78,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
       await Supabase.instance.client.from('app_settings').update({
         'min_withdrawal_limit': withdrawLimit,
         'referral_bonus_amount': referBonus,
+        'joining_bonus_amount': joiningBonus, // 👇 NAYA: Database mein save kiya
       }).eq('id', response['id']);
 
       if (mounted) {
@@ -94,6 +102,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
   void dispose() {
     _withdrawLimitController.dispose();
     _referBonusController.dispose();
+    _joiningBonusController.dispose(); // 👇 NAYA: Dispose zaroori hai
     super.dispose();
   }
 
@@ -102,7 +111,8 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FD),
       appBar: AppBar(
-        title: const Text('Swift Chat Economy', style: TextStyle(fontWeight: FontWeight.bold)),
+        // 👇 NAYA: AdRewards Pro naam update kiya
+        title: const Text('AdRewards Pro Economy', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF1D1B20),
         elevation: 0,
@@ -149,7 +159,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                         controller: _withdrawLimitController,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          hintText: "e.g., 100",
+                          hintText: "e.g., 500",
                           filled: true,
                           fillColor: const Color(0xFFFDF8FD),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -162,7 +172,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
 
                 const SizedBox(height: 20),
 
-                // Referral Bonus Box
+                // Referral Bonus Box (Referrer ke liye)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -180,9 +190,55 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                           Text("Referral Bonus (Coins)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Reward for the user who shares the invite code.",
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: _referBonusController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          hintText: "e.g., 100",
+                          filled: true,
+                          fillColor: const Color(0xFFFDF8FD),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // 👇 NAYA: Joining Bonus Box (Naye User ke liye)
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.card_giftcard_rounded, color: Colors.green),
+                          SizedBox(width: 10),
+                          Text("Joining Bonus (Coins)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Reward for the new user when they apply an invite code.",
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _joiningBonusController,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           hintText: "e.g., 50",
@@ -210,7 +266,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                       elevation: 2,
                     ),
                     child: _isSaving 
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text(
                             "SAVE SETTINGS", 
                             style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5),

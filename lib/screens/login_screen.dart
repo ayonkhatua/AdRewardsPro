@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'dart:io'; // 👇 NAYA: Device info ke liye
+import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:device_info_plus/device_info_plus.dart'; // 👇 NAYA: Device ID nikalne ke liye
+import 'package:device_info_plus/device_info_plus.dart'; 
+import 'package:url_launcher/url_launcher.dart'; // 👇 NAYA: Link open karne ke liye
+
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -20,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   
   bool _isLoading = false;
   bool _isLoginMode = true;
+  bool _isPrivacyChecked = false; // 👇 NAYA: Privacy policy checkbox state
   
   final supabase = Supabase.instance.client;
   late final StreamSubscription<AuthState> _authSubscription;
@@ -28,7 +31,6 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     
-    // 👇 UPDATED: Listener ab direct Home par nahi bhejega, pehle Device ID check karega
     _authSubscription = supabase.auth.onAuthStateChange.listen((data) async {
       if (data.event == AuthChangeEvent.signedIn) {
         final user = data.session?.user;
@@ -55,7 +57,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     
     try {
-      // 1. Phone ka actual Device ID nikalo
       final deviceInfo = DeviceInfoPlugin();
       String currentDeviceId = 'unknown_device';
       
@@ -67,21 +68,18 @@ class _LoginScreenState extends State<LoginScreen> {
         currentDeviceId = iosInfo.identifierForVendor ?? 'unknown_ios';
       }
 
-      // 2. Database mein check karo kya is Device ID par koi AUR account hai?
       final existingAccounts = await supabase
           .from('profiles')
           .select('id')
           .eq('device_id', currentDeviceId)
           .neq('id', currentUserId);
 
-      // 3. Agar koi purana account mil gaya -> Strict Block!
       if (existingAccounts.isNotEmpty) {
-        await supabase.auth.signOut(); // Naye account ko turant bahar phenko
+        await supabase.auth.signOut(); 
         if (mounted) {
           _showDeviceRestrictedDialog();
         }
       } else {
-        // 4. Clean Device! Is naye user ke sath ye Device ID link kar do
         await supabase
             .from('profiles')
             .update({'device_id': currentDeviceId})
@@ -129,6 +127,12 @@ class _LoginScreenState extends State<LoginScreen> {
   // EMAIL AUTH LOGIC
   // ==========================================
   Future<void> _handleAuth() async {
+    // 👇 NAYA: Privacy Policy check
+    if (!_isPrivacyChecked) {
+      _showSnackBar('Please agree to the Privacy Policy first.', Colors.orange);
+      return;
+    }
+
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final referralCode = _referralController.text.trim();
@@ -151,7 +155,6 @@ class _LoginScreenState extends State<LoginScreen> {
              await _processReferralCode(res.user!.id, referralCode);
           }
           _showSnackBar('Account created! Logging in...', Colors.green);
-          // Note: AuthListener automatically handle karega aage ka process
         }
       }
     } on AuthException catch (e) {
@@ -176,6 +179,12 @@ class _LoginScreenState extends State<LoginScreen> {
   // GOOGLE SIGN-IN LOGIC (WEB OAUTH)
   // ==========================================
   Future<void> _googleSignIn() async {
+    // 👇 NAYA: Privacy Policy check for Google Login too
+    if (!_isPrivacyChecked) {
+      _showSnackBar('Please agree to the Privacy Policy first.', Colors.orange);
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       await supabase.auth.signInWithOAuth(
@@ -280,7 +289,51 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
+                      
+                      // 👇 NAYA: Privacy Policy Checkbox UI
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _isPrivacyChecked,
+                            onChanged: (val) {
+                              setState(() {
+                                _isPrivacyChecked = val ?? false;
+                              });
+                            },
+                            activeColor: const Color(0xFF6A11CB),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () async {
+                                final url = Uri.parse('https://ayonkhatua.github.io/privacy-policy/');
+                                if (await canLaunchUrl(url)) {
+                                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                                }
+                              },
+                              child: const Text.rich(
+                                TextSpan(
+                                  text: 'I agree to the ',
+                                  style: TextStyle(fontSize: 13, color: Colors.black87),
+                                  children: [
+                                    TextSpan(
+                                      text: 'Privacy Policy',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFF6A11CB),
+                                        fontWeight: FontWeight.bold,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,
                         height: 50,
