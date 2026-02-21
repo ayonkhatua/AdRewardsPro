@@ -17,25 +17,34 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
   bool _isLoading = false;
   bool _saveUpi = false; 
   
-  // Withdrawal settings
-  final int _minimumRupeeWithdrawal = 10; 
+  // 👇 NAYA: Admin Control Variables
+  int _minimumRupeeWithdrawal = 10; // Default fallback
+  final int _coinValuePerRupee = 50; // 100 coins = ₹2 (i.e. 50 coins = ₹1)
 
   @override
   void initState() {
     super.initState();
-    _fetchUserData(); 
+    _fetchUserDataAndSettings(); // 👇 Dono ek sath fetch karenge
     _amountController.addListener(_calculateCoins);
   }
 
-  Future<void> _fetchUserData() async {
+  // 👇 NAYA LOGIC: DB se Limit aur User Balance lana
+  Future<void> _fetchUserDataAndSettings() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      setState(() => _walletBalance = 0); 
+      if (mounted) setState(() => _walletBalance = 0); 
       return;
     }
 
     try {
-      final response = await Supabase.instance.client
+      // 1. Fetch Admin Settings First (minimum withdrawal limit in coins)
+      final settingsResponse = await Supabase.instance.client
+          .from('app_settings')
+          .select('min_withdrawal_limit')
+          .single();
+
+      // 2. Fetch User Profile
+      final profileResponse = await Supabase.instance.client
           .from('profiles')
           .select('wallet_balance, saved_upi_id') 
           .eq('id', user.id)
@@ -43,23 +52,27 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
 
       if (mounted) {
         setState(() {
-          _walletBalance = response['wallet_balance'] ?? 0;
+          // Calculate Rupee limit from Coin limit (e.g., 500 coins / 50 = ₹10)
+          int minCoins = settingsResponse['min_withdrawal_limit'] ?? 500;
+          _minimumRupeeWithdrawal = (minCoins / _coinValuePerRupee).floor();
+
+          _walletBalance = profileResponse['wallet_balance'] ?? 0;
           
-          if (response['saved_upi_id'] != null && response['saved_upi_id'].toString().isNotEmpty) {
-            _upiController.text = response['saved_upi_id'];
+          if (profileResponse['saved_upi_id'] != null && profileResponse['saved_upi_id'].toString().isNotEmpty) {
+            _upiController.text = profileResponse['saved_upi_id'];
             _saveUpi = true;
           }
         });
       }
     } catch (e) {
-      debugPrint("Error fetching user data: $e");
+      debugPrint("Error fetching data: $e");
     }
   }
 
   void _calculateCoins() {
     final rupeeAmount = int.tryParse(_amountController.text) ?? 0;
     setState(() {
-      _requiredCoins = rupeeAmount * 50; 
+      _requiredCoins = rupeeAmount * _coinValuePerRupee; 
     });
   }
 
@@ -67,6 +80,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
     final rupeeAmount = int.tryParse(_amountController.text) ?? 0;
     final upiId = _upiController.text.trim();
 
+    // 👇 NAYA: Admin wali dynamic limit check ho rahi hai
     if (rupeeAmount < _minimumRupeeWithdrawal) {
       _showSnackBar('Minimum withdrawal is ₹$_minimumRupeeWithdrawal', Colors.red);
       return;
@@ -94,7 +108,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
           'amount_in_rupees': rupeeAmount,
           'coins_deducted': _requiredCoins,
           'upi_id': upiId,
-          'status': 'pending', // By default pending rahega
+          'status': 'pending', 
         });
 
         // 2. User ke wallet se turant coins kaat lo
@@ -111,7 +125,6 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
               .update({'saved_upi_id': upiId}) 
               .eq('id', user.id);
         } else {
-          // Agar untick kiya hai toh database se hata do
           await Supabase.instance.client
               .from('profiles')
               .update({'saved_upi_id': null}) 
@@ -217,6 +230,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                   Text(
                     _requiredCoins > 0 
                       ? "$_requiredCoins Coins will be deducted." 
+                      // 👇 NAYA: UI mein bhi dynamic limit dikhegi
                       : "100 Coins = ₹2 (Min. ₹$_minimumRupeeWithdrawal)",
                     style: TextStyle(
                       color: (_requiredCoins > _walletBalance) ? Colors.red : Colors.grey.shade700,

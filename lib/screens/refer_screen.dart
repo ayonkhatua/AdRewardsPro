@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:supabase_flutter/supabase_flutter.dart';
-// TODO: pubspec.yaml mein share_plus dalne ke baad ise uncomment karein
+import 'package:share_plus/share_plus.dart'; 
 
 class ReferScreen extends StatefulWidget {
   const ReferScreen({super.key});
@@ -12,40 +12,56 @@ class ReferScreen extends StatefulWidget {
 
 class _ReferScreenState extends State<ReferScreen> {
   String _referralCode = "LOADING...";
+  int _referralBonus = 100; // 👇 NAYA: Default bonus amount
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchReferralCode();
+    _fetchData(); // 👇 NAYA: Ab dono cheezein ek sath aayengi
   }
 
-  // Database se Referral Code nikalna
-  Future<void> _fetchReferralCode() async {
+  // Database se Referral Code aur Admin Bonus Limit nikalna
+  Future<void> _fetchData() async {
     final user = Supabase.instance.client.auth.currentUser;
-    
-    if (user == null) {
-      setState(() {
-        _referralCode = "AYON123"; 
-        _isLoading = false;
-      });
-      return;
-    }
 
     try {
-      final response = await Supabase.instance.client
+      // 1. Admin Panel se dynamic bonus amount fetch karo
+      final settingsResponse = await Supabase.instance.client
+          .from('app_settings')
+          .select('referral_bonus_amount')
+          .single();
+          
+      int fetchedBonus = settingsResponse['referral_bonus_amount'] ?? 100;
+
+      if (user == null) {
+        if (mounted) {
+          setState(() {
+            _referralCode = "AYON123"; 
+            _referralBonus = fetchedBonus;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      // 2. User ka referral code fetch karo
+      final profileResponse = await Supabase.instance.client
           .from('profiles')
           .select('referral_code')
           .eq('id', user.id)
           .single();
 
-      setState(() {
-        _referralCode = response['referral_code'] ?? "NO_CODE";
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _referralCode = profileResponse['referral_code'] ?? "NO_CODE";
+          _referralBonus = fetchedBonus;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      print("Error fetching code: $e");
-      setState(() => _isLoading = false);
+      debugPrint("Error fetching data: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -53,7 +69,7 @@ class _ReferScreenState extends State<ReferScreen> {
     Clipboard.setData(ClipboardData(text: _referralCode));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('🎉 Referral Code Copied!'),
+        content: Text('🎉 Invite Code Copied!'),
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
       ),
@@ -61,19 +77,10 @@ class _ReferScreenState extends State<ReferScreen> {
   }
 
   void _shareCode() {
-    // Professional Share Message
-    final String shareMessage = "Hey! I'm earning real money on AdRewards Pro. 🚀\n\nDownload the app, use my Referral Code: *$_referralCode* and get a head start!\n\nLet's earn together!";
+    // Swift Chat ke liye Professional Share Message
+    final String shareMessage = "Hey! I'm connecting with friends on Swift Chat. 🚀\n\nDownload the app, use my Invite Code: *$_referralCode* and let's chat!\n\nJoin me now!";
     
-    // TODO: Jab pubspec.yaml mein package add ho jaye, tab is line ko uncomment kar dena
-    // Share.share(shareMessage); 
-
-    // Abhi testing ke liye SnackBar
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Share menu will open here in Live App!'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    Share.share(shareMessage); 
   }
 
   @override
@@ -81,7 +88,7 @@ class _ReferScreenState extends State<ReferScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FD), 
       appBar: AppBar(
-        title: const Text('Refer & Earn', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Invite Friends', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -111,13 +118,13 @@ class _ReferScreenState extends State<ReferScreen> {
 
                 // 2. MAIN HEADING
                 const Text(
-                  "Invite Friends & Earn",
+                  "Invite Friends to Chat",
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF1D1B20)),
                 ),
                 
                 const SizedBox(height: 20),
 
-                // 3. STRICT CONDITION TEXT (Anti-Hacker Warning)
+                // 3. STRICT CONDITION TEXT (Dynamic Bonus ke sath)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -126,21 +133,22 @@ class _ReferScreenState extends State<ReferScreen> {
                     border: Border.all(color: const Color(0xFFFDE293), width: 2),
                     boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
-                  child: const Column(
+                  child: Column(
                     children: [
-                      Row(
+                      const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.security_rounded, color: Color(0xFF146C2E), size: 24),
                           SizedBox(width: 8),
-                          Text("100% Verified Reward", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF146C2E))),
+                          Text("Secure Connection", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF146C2E))),
                         ],
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
+                      // 👇 NAYA: Yahan UI mein dynamic bonus amount dikhega
                       Text(
-                        "You will receive 100 Bonus Coins ONLY when your friend makes their FIRST SUCCESSFUL WITHDRAWAL.",
+                        "You will receive $_referralBonus Bonus Coins when your friend signs up and starts messaging securely on Swift Chat.",
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Color(0xFF311300), fontSize: 14, fontWeight: FontWeight.w600, height: 1.5),
+                        style: const TextStyle(color: Color(0xFF311300), fontSize: 14, fontWeight: FontWeight.w600, height: 1.5),
                       ),
                     ],
                   ),
@@ -149,7 +157,7 @@ class _ReferScreenState extends State<ReferScreen> {
                 const SizedBox(height: 40),
 
                 // 4. REFERRAL CODE BOX
-                const Text("YOUR REFERRAL CODE", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                const Text("YOUR INVITE CODE", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                 const SizedBox(height: 10),
                 
                 Container(

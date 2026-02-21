@@ -12,7 +12,8 @@ import 'pages/rewards_control_page.dart';
 import 'pages/manage_users_page.dart';
 import 'pages/system_control_page.dart'; 
 import 'pages/admin_withdrawals_page.dart'; 
-import 'pages/admin_support_page.dart'; // 👇 NAYA: Support Page Import Kiya
+import 'pages/admin_support_page.dart'; 
+import 'pages/admin_settings_page.dart'; // 👇 NAYA: Economy Settings Page Import Kiya
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -28,7 +29,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   final _supabase = Supabase.instance.client;
 
-  // 👇 NAYA: Title list mein Support Inbox add kiya
+  // 👇 NAYA: Title list mein Economy Settings add kiya (Index 7)
   final List<String> _titles = [
     'Dashboard Overview',
     'Ads Settings',
@@ -36,10 +37,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
     'Manage Users',
     'System Control',
     'Withdrawal Requests',
-    'Support Inbox' 
+    'Support Inbox',
+    'Economy Settings' 
   ];
 
-  // 👇 NAYA: Pages list mein AdminSupportPage() add kiya
+  // 👇 NAYA: Pages list mein AdminSettingsPage() add kiya (Index 7)
   final List<Widget> _pages = const [
     OverviewPage(),
     AdsControlPage(),
@@ -48,6 +50,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     SystemControlPage(), 
     AdminWithdrawalsPage(), 
     AdminSupportPage(),
+    AdminSettingsPage(), 
   ];
 
   @override
@@ -57,7 +60,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==========================================
-  // 🛡️ SECURITY CHECK LOGIC (UPDATED WITH MODEL)
+  // 🛡️ SECURITY CHECK LOGIC 
   // ==========================================
   Future<void> _verifyAdminSecurity() async {
     try {
@@ -143,9 +146,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             _buildDrawerItem(icon: Icons.people, title: 'Manage Users', index: 3),
             _buildDrawerItem(icon: Icons.settings_system_daydream, title: 'System Control', index: 4), 
             _buildDrawerItem(icon: Icons.payment, title: 'Withdrawal Requests', index: 5), 
-            
-            // 👇 NAYA: Support Inbox ka Drawer Button add kiya
             _buildDrawerItem(icon: Icons.support_agent_rounded, title: 'Support Inbox', index: 6),
+            
+            // 👇 NAYA: Economy Settings ka Drawer Button add kiya
+            _buildDrawerItem(icon: Icons.account_balance_wallet_rounded, title: 'Economy Settings', index: 7),
             
             const Divider(),
             ListTile(
