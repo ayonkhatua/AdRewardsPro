@@ -82,21 +82,25 @@ class _HomeScreenState extends State<HomeScreen> {
         _adsEnabled = false; 
       }
 
+      // 1. Pehle Update Check karo (Maintenance se bhi pehle)
+      if (settings.appVersion > CURRENT_APP_VERSION) {
+        setState(() {
+          _isUpdateAvailable = true;
+          _updateUrl = settings.updateUrl;
+          _updateMessage = settings.updateMessage;
+          _isLoading = false; // Loading band kardo taaki popup dikhe
+        });
+        _showUpdateDialog();
+        return; // Yahan ruk jao, aage mat jao
+      }
+
+      // 2. Phir Maintenance Check karo
       if (settings.isMaintenance && !_isAdminUser) {
         setState(() {
           _isMaintenance = true;
           _isLoading = false;
         });
         return; 
-      }
-
-      if (settings.appVersion > CURRENT_APP_VERSION) {
-        setState(() {
-          _isUpdateAvailable = true;
-          _updateUrl = settings.updateUrl;
-          _updateMessage = settings.updateMessage;
-        });
-        _showUpdateDialog();
       }
 
       final profileData = await supabase.from('profiles').select('is_blocked').eq('id', user.id).single();
@@ -110,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint("Startup Check Error: $e");
     } finally {
-      if (mounted && !_isMaintenance && !_isBlocked) {
+      if (mounted && !_isMaintenance && !_isBlocked && !_isUpdateAvailable) {
         setState(() => _isLoading = false);
       }
     }
@@ -179,32 +183,65 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // 🔥 NAYA STRICT UPDATE LOGIC
   void _showUpdateDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false, 
-      builder: (context) => PopScope(
-        canPop: false, 
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Update Required!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          content: Text(_updateMessage),
-          actions: [
-            ElevatedButton.icon(
-              onPressed: () async {
-                final url = Uri.parse(_updateUrl);
-                if (await canLaunchUrl(url)) {
-                  await launchUrl(url, mode: LaunchMode.externalApplication);
-                }
-              },
-              icon: const Icon(Icons.download),
-              label: const Text('Download Now'),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6750A4), foregroundColor: Colors.white),
-            )
-          ],
+    // Thoda delay taaki screen pehle build ho jaye
+    Future.delayed(Duration.zero, () {
+      showDialog(
+        context: context,
+        barrierDismissible: false, 
+        builder: (context) => PopScope(
+          canPop: false, // Back button disable karega
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.system_update, color: Colors.blue, size: 28),
+                SizedBox(width: 8),
+                Text('Update Required!', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Text(_updateMessage, style: const TextStyle(fontSize: 16)),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  // App band karne ka code
+                  if (Platform.isAndroid) {
+                    SystemNavigator.pop();
+                  } else {
+                    exit(0);
+                  }
+                },
+                child: const Text('Exit App', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final url = Uri.parse(_updateUrl);
+                  try {
+                    // Try to launch directly (better for Android 11+)
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  } catch (e) {
+                    debugPrint("Could not launch URL: $e");
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Could not open the link. Please check your internet.')),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.download),
+                label: const Text('Update Now'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6A11CB), 
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              )
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   void _handleTabSwitch(int index) {
@@ -318,6 +355,11 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    // Agar Update Available hai, toh baaki UI draw hi mat karo (Screen khali rahegi popup ke peeche)
+    if (_isUpdateAvailable) {
+       return const Scaffold(backgroundColor: Colors.white);
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FD), 
       body: SafeArea(child: _tabs[_currentIndex]),
@@ -364,6 +406,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+// ... BAAKI TABS WAISE HI RAHENGE (HomeTab, EarnTab, ProfileTab) 
+// Maine unhe yahan se hata diya hai space bachane ke liye, par aap apni purani file wali hi paste kar lena.
 
 // ==========================================
 // TAB 1: HOME TAB

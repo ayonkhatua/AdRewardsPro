@@ -56,6 +56,42 @@ class _SystemControlPageState extends State<SystemControlPage> {
     }
   }
 
+  // 🔥 NAYA FUNCTION: Sirf Maintenance Mode ko LIVE update karne ke liye
+  Future<void> _updateMaintenanceLive(bool value) async {
+    // UI ko turant update karo taaki switch ghoom jaye
+    setState(() {
+      _isMaintenance = value;
+    });
+
+    try {
+      // Database mein direct update bhejo
+      await _supabase.from('app_settings').update({
+        'is_maintenance': value,
+      }).eq('id', 1);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Maintenance Mode ${value ? "ON" : "OFF"} ho gaya!'),
+            backgroundColor: value ? Colors.red : Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error updating maintenance mode: $e");
+      // Agar error aaye toh switch ko wapas purani state mein daal do
+      setState(() {
+        _isMaintenance = !value;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Failed to update Maintenance Mode'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _updateSettings() async {
     setState(() => _isSaving = true);
     
@@ -122,9 +158,8 @@ class _SystemControlPageState extends State<SystemControlPage> {
               activeThumbColor: Colors.white,
               activeTrackColor: Colors.red,
               onChanged: (bool value) {
-                setState(() {
-                  _isMaintenance = value;
-                });
+                // Yahan naya live function call kiya hai
+                _updateMaintenanceLive(value);
               },
             ),
           ),
