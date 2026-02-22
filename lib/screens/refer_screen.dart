@@ -150,7 +150,7 @@ class _ReferScreenState extends State<ReferScreen> {
                       const SizedBox(height: 12),
                       // 👇 NAYA: Both bonuses mentioned clearly
                       Text(
-                        "You will receive $_referralBonus Coins when your friend joins AdRewards Pro using your code. Your friend will also get $_joiningBonus Coins instantly!",
+                        "You will receive $_referralBonus Coins when your friend joins AdRewards Pro using your code and first succussful withdrwal. Your friend will also get $_joiningBonus Coins instantly!",
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: Color(0xFF311300), fontSize: 14, fontWeight: FontWeight.w600, height: 1.5),
                       ),
