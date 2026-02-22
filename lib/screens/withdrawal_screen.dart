@@ -17,18 +17,17 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
   bool _isLoading = false;
   bool _saveUpi = false; 
   
-  // 👇 NAYA: Admin Control Variables
+  // Admin Control Variables
   int _minimumRupeeWithdrawal = 10; // Default fallback
   final int _coinValuePerRupee = 50; // 100 coins = ₹2 (i.e. 50 coins = ₹1)
 
   @override
   void initState() {
     super.initState();
-    _fetchUserDataAndSettings(); // 👇 Dono ek sath fetch karenge
+    _fetchUserDataAndSettings(); 
     _amountController.addListener(_calculateCoins);
   }
 
-  // 👇 NAYA LOGIC: DB se Limit aur User Balance lana
   Future<void> _fetchUserDataAndSettings() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
@@ -37,7 +36,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
     }
 
     try {
-      // 1. Fetch Admin Settings First (minimum withdrawal limit in coins)
+      // 1. Fetch Admin Settings
       final settingsResponse = await Supabase.instance.client
           .from('app_settings')
           .select('min_withdrawal_limit')
@@ -52,7 +51,6 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
 
       if (mounted) {
         setState(() {
-          // Calculate Rupee limit from Coin limit (e.g., 500 coins / 50 = ₹10)
           int minCoins = settingsResponse['min_withdrawal_limit'] ?? 500;
           _minimumRupeeWithdrawal = (minCoins / _coinValuePerRupee).floor();
 
@@ -80,7 +78,6 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
     final rupeeAmount = int.tryParse(_amountController.text) ?? 0;
     final upiId = _upiController.text.trim();
 
-    // 👇 NAYA: Admin wali dynamic limit check ho rahi hai
     if (rupeeAmount < _minimumRupeeWithdrawal) {
       _showSnackBar('Minimum withdrawal is ₹$_minimumRupeeWithdrawal', Colors.red);
       return;
@@ -91,9 +88,20 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
       return;
     }
 
-    if (upiId.isEmpty || !upiId.contains('@')) {
-      _showSnackBar('Please enter a valid UPI ID.', Colors.red);
+    // 🔥 NAYA VALIDATION LOGIC: Number ya UPI dono chalenge
+    if (upiId.isEmpty) {
+      _showSnackBar('Please enter your UPI ID or Mobile Number.', Colors.red);
       return;
+    }
+
+    // Agar '@' nahi hai, toh check karo ki kya wo 10-digit ka number hai
+    if (!upiId.contains('@')) {
+      // Regex check karta hai ki kya string mein sirf numbers hain aur exact 10 digits hain
+      final isPhoneNumber = RegExp(r'^[0-9]{10}$').hasMatch(upiId);
+      if (!isPhoneNumber) {
+        _showSnackBar('Enter a valid 10-digit Number or UPI ID (e.g., number@upi).', Colors.red);
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -230,7 +238,6 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                   Text(
                     _requiredCoins > 0 
                       ? "$_requiredCoins Coins will be deducted." 
-                      // 👇 NAYA: UI mein bhi dynamic limit dikhegi
                       : "100 Coins = ₹2 (Min. ₹$_minimumRupeeWithdrawal)",
                     style: TextStyle(
                       color: (_requiredCoins > _walletBalance) ? Colors.red : Colors.grey.shade700,
@@ -243,16 +250,17 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
               const SizedBox(height: 30),
 
               // 3. UPI INPUT SECTION
-              const Text("UPI ID / Number", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1D1B20))),
+              const Text("UPI ID / Mobile Number", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1D1B20))),
               const SizedBox(height: 10),
               TextField(
                 controller: _upiController,
-                keyboardType: TextInputType.emailAddress,
+                // 🔥 NAYA: Keyboard type change kiya taaki number aur text dono type karna asaan ho
+                keyboardType: TextInputType.text,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.account_balance_rounded, color: Color(0xFF6750A4)),
                   filled: true,
                   fillColor: Colors.white,
-                  hintText: "e.g. 9876543210@paytm",
+                  hintText: "e.g. 9876543210 or name@upi",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF6750A4), width: 2)),
                 ),

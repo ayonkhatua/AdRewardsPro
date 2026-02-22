@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/services.dart'; // 👇 NAYA: Copy function ke liye import kiya
 
 class AdminWithdrawalsPage extends StatefulWidget {
   const AdminWithdrawalsPage({super.key});
@@ -258,12 +259,30 @@ class _AdminWithdrawalsPageState extends State<AdminWithdrawalsPage> {
                                 ),
                                 const SizedBox(height: 8),
                                 
-                                // UPI aur Email Details
+                                // 👇 NAYA: Copy button add kiya gaya hai
                                 Row(
                                   children: [
                                     const Icon(Icons.account_balance, size: 16, color: Color(0xFF6A11CB)),
                                     const SizedBox(width: 8),
-                                    Text(req['upi_id'], style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                                    Expanded(
+                                      child: Text(req['upi_id'], style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.copy, size: 18, color: Colors.grey),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      tooltip: "Copy",
+                                      onPressed: () {
+                                        Clipboard.setData(ClipboardData(text: req['upi_id'].toString()));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text("Copied!"), 
+                                            duration: Duration(seconds: 1),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
